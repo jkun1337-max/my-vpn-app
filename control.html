@@ -187,6 +187,20 @@ td { padding: 14px 16px; border-top: 1px solid var(--border); font-size: 13px; }
     </span>
   </div>
 
+  <!-- Управление аккаунтами -->
+  <div class="name-bar" style="border-color:#f59e0b; flex-wrap:wrap">
+    <label>👤 Аккаунты:</label>
+    <input type="text" id="accUid" placeholder="ID (user-07)" style="max-width:120px">
+    <input type="text" id="accEmail" placeholder="Email" style="max-width:210px">
+    <input type="text" id="accPass" placeholder="Пароль" style="max-width:140px">
+    <input type="text" id="accName" placeholder="Имя" style="max-width:120px">
+    <button class="btn" onclick="addAccount()" style="background:#f59e0b;color:#000">➕ Добавить</button>
+    <button class="btn" onclick="deleteAccount()" style="background:#ef4444;color:#fff">🗑 Удалить выбранный</button>
+    <span style="color:var(--muted);font-size:12px;width:100%;margin-top:6px">
+      Добавь или удали аккаунт. Изменения появятся в приложении через 15 сек.
+    </span>
+  </div>
+
   <div class="stats">
     <div class="stat"><div class="label">Всего прокси</div><div class="value" id="statTotal">—</div></div>
     <div class="stat"><div class="label">Канада</div><div class="value" id="statCa">—</div></div>
@@ -205,17 +219,59 @@ const REPO = "jkun1337-max/my-vpn-app";
 const FILE = "status.json";
 const API = `https://api.github.com/repos/${REPO}/contents/${FILE}`;
 
-// Аккаунты и их ID (должны совпадать с приложением)
-const ACCOUNTS = {
-  'user-01': 'Пользователь 1',
-  'user-02': 'Пользователь 2',
-  'user-03': 'Пользователь 3',
-  'user-04': 'Пользователь 4',
-  'user-05': 'Пользователь 5',
-  'user-06': 'Пользователь 6'
-};
+// Аккаунты загружаются из status.json (общий источник)
+let ACCOUNTS_LIST = [];
 function myUid() { return document.getElementById('myUid').value; }
-function myName() { return ACCOUNTS[myUid()] || myUid(); }
+function myName() {
+  const acc = ACCOUNTS_LIST.find(a => a.uid === myUid());
+  return acc ? acc.name : myUid();
+}
+
+function renderAccountSelect() {
+  const sel = document.getElementById('myUid');
+  const prev = sel.value;
+  sel.innerHTML = ACCOUNTS_LIST.map(a =>
+    `<option value="${a.uid}">${a.name} (${a.email})</option>`
+  ).join('');
+  if (prev && ACCOUNTS_LIST.some(a => a.uid === prev)) sel.value = prev;
+}
+
+function addAccount() {
+  const uid = document.getElementById('accUid').value.trim();
+  const email = document.getElementById('accEmail').value.trim();
+  const password = document.getElementById('accPass').value.trim();
+  const name = document.getElementById('accName').value.trim();
+  if (!uid || !email || !password) {
+    setMsg('❌ Заполни ID, Email и Пароль', 'error'); return;
+  }
+  if (ACCOUNTS_LIST.some(a => a.uid === uid)) {
+    setMsg('⚠️ Такой ID уже есть', 'error'); return;
+  }
+  ACCOUNTS_LIST.push({ uid, email, password, name: name || uid });
+  currentData.accounts = ACCOUNTS_LIST;
+  document.getElementById('accUid').value = '';
+  document.getElementById('accEmail').value = '';
+  document.getElementById('accPass').value = '';
+  document.getElementById('accName').value = '';
+  saveAll().then(() => {
+    renderAccountSelect();
+    render();
+    setMsg(`✅ Аккаунт ${uid} добавлен`, 'ok');
+  });
+}
+
+function deleteAccount() {
+  const uid = myUid();
+  if (!uid) { setMsg('Выбери аккаунт сверху', 'error'); return; }
+  if (!confirm('Удалить аккаунт ' + uid + '?')) return;
+  ACCOUNTS_LIST = ACCOUNTS_LIST.filter(a => a.uid !== uid);
+  currentData.accounts = ACCOUNTS_LIST;
+  saveAll().then(() => {
+    renderAccountSelect();
+    render();
+    setMsg(`🗑 Аккаунт ${uid} удалён`, 'ok');
+  });
+}
 
 function getToken() {
   return localStorage.getItem('snowvpn_token') || '';
@@ -243,7 +299,7 @@ let PROXIES = [
   {host:"193.32.152.105",  port:9989, country:"Украина", type:"socks5", user:"2t0GU9", pass:"B4fozL"},
 ];
 
-let currentData = { connections: [], commands: {} };
+let currentData = { connections: [], commands: {}, proxies: [], accounts: [] };
 let currentSha = null;
 
 function b64encode(str) {
@@ -276,6 +332,10 @@ async function loadAll() {
     // если в status.json есть свой список прокси — используем его
     if (currentData.proxies && currentData.proxies.length) {
       PROXIES = currentData.proxies;
+    }
+    if (currentData.accounts && currentData.accounts.length) {
+      ACCOUNTS_LIST = currentData.accounts;
+      renderAccountSelect();
     }
     render();
     setMsg("✅ Данные загружены", "ok");
@@ -338,8 +398,8 @@ function render() {
       totalConn += users.length;
       const usersText = users.length ? users.join(", ") : "—";
       const key = p.host + ":" + p.port;
-      const myName = myName();
-      const iAmHere = users.includes(myName);
+      const curName = myName();
+      const iAmHere = users.includes(curName);
       const full = users.length >= 3;
 
       let btn;
