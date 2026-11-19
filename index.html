@@ -334,16 +334,52 @@ const loginAlert = document.getElementById('loginAlert');
 const userNameEl = document.getElementById('userName');
 const downloadBtn = document.getElementById('downloadBtn');
 
-// Проверяем, есть ли сохранённый вход
-const saved = localStorage.getItem('vpn_user');
-if (saved) {
+// --- Защита сессии: привязка к устройству + срок действия ---
+// Отпечаток устройства (браузер + экран + язык + часовой пояс).
+// У другого человека на другом компьютере он будет другим → ссылка не сработает.
+function deviceFingerprint() {
+  const c = document.createElement('canvas');
+  const ctx = c.getContext('2d');
+  ctx.fillText('SnowVPN', 10, 20);
+  const canvasData = c.toDataURL();
+  const fp = [
+    navigator.userAgent,
+    screen.width + 'x' + screen.height,
+    navigator.language,
+    Intl.DateTimeFormat().resolvedOptions().timeZone,
+    canvasData.length
+  ].join('|');
+  // проensible хэш
+  let hash = 0;
+  for (let i = 0; i < fp.length; i++) {
+    hash = ((hash << 5) - hash) + fp.charCodeAt(i);
+    hash |= 0;
+  }
+  return 'dev-' + Math.abs(hash).toString(16);
+}
+
+const SESSION_HOURS = 24;
+
+function checkSession() {
+  const saved = localStorage.getItem('vpn_user');
+  if (!saved) return false;
   try {
-    const user = JSON.parse(saved);
-    showApp(user.name);
+    const s = JSON.parse(saved);
+    const fp = deviceFingerprint();
+    const ageOk = (Date.now() - s.time) < SESSION_HOURS * 3600 * 1000;
+    if (s.device === fp && ageOk) {
+      showApp(s.name);
+      return true;
+    }
+    // чужое устройство или истёкло — разлогиниваем
+    localStorage.removeItem('vpn_user');
+    return false;
   } catch (e) {
     localStorage.removeItem('vpn_user');
+    return false;
   }
 }
+checkSession();
 
 loginForm.addEventListener('submit', (e) => {
   e.preventDefault();
@@ -354,7 +390,12 @@ loginForm.addEventListener('submit', (e) => {
 
   if (user) {
     loginAlert.style.display = 'none';
-    localStorage.setItem('vpn_user', JSON.stringify(user));
+    localStorage.setItem('vpn_user', JSON.stringify({
+      name: user.name,
+      email: user.email,
+      device: deviceFingerprint(),
+      time: Date.now()
+    }));
     showApp(user.name);
   } else {
     loginAlert.textContent = 'Неверный email или пароль';
