@@ -1,13 +1,10 @@
 {
-  "connections": [
-    {
-      "user": "Паша",
-      "proxy": "168.81.205.165:9899",
-      "country": "Бразилия ",
-      "since": "23:57:43"
+  "connections": [],
+  "commands": {
+    "Паша": {
+      "action": "disconnect"
     }
-  ],
-  "commands": {},
+  },
   "proxies": [
     {
       "host": "138.219.122.200",
