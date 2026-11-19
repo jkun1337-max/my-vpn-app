@@ -1,1 +1,100 @@
-{"commands":{},"connections":[],"proxies":[],"accounts":[{"email":"frost.wolf@protonmail.com","name":"Пользователь 1","uid":"user-01","password":"Fw9#kL2!vN8@qR"},{"email":"north.star@outlook.com","name":"Пользователь 2","uid":"user-02","password":"Ns3%pT7\u0026wM4#jK"},{"email":"polar.bear@gmail.com","name":"Пользователь 3","uid":"user-03","password":"Pb6@mQ1!zX9%rD"},{"email":"snow.owl@yandex.ru","name":"Пользователь 4","uid":"user-04","password":"So4#vH8\u0026nP2!kL"},{"email":"ice.fox@mail.ru","name":"Пользователь 5","uid":"user-05","password":"If7%rB3@wT6#mQ"},{"email":"winter.deer@icloud.com","name":"Пользователь 6","uid":"user-06","password":"Wd2!yN9@kL5\u0026pV"}]}
+{
+  "commands": {},
+  "connections": [],
+  "proxies": [
+    {
+      "host": "138.219.122.200",
+      "port": 9148,
+      "country": "Канада",
+      "type": "socks5",
+      "user": "7Kufgp",
+      "pass": "KJwuh8"
+    },
+    {
+      "host": "200.71.127.25",
+      "port": 9979,
+      "country": "Канада",
+      "type": "socks5",
+      "user": "7Kufgp",
+      "pass": "KJwuh8"
+    },
+    {
+      "host": "168.196.237.162",
+      "port": 9302,
+      "country": "Канада",
+      "type": "socks5",
+      "user": "7Kufgp",
+      "pass": "KJwuh8"
+    },
+    {
+      "host": "168.196.237.129",
+      "port": 9946,
+      "country": "Канада",
+      "type": "socks5",
+      "user": "7Kufgp",
+      "pass": "KJwuh8"
+    },
+    {
+      "host": "193.32.154.106",
+      "port": 9239,
+      "country": "Украина",
+      "type": "socks5",
+      "user": "2t0GU9",
+      "pass": "B4fozL"
+    },
+    {
+      "host": "193.32.152.105",
+      "port": 9989,
+      "country": "Украина",
+      "type": "socks5",
+      "user": "2t0GU9",
+      "pass": "B4fozL"
+    },
+    {
+      "host": "23.236.141.53",
+      "port": 9330,
+      "country": "сша",
+      "type": "socks5",
+      "user": "hbo8jJ",
+      "pass": "XvSNgd"
+    }
+  ],
+  "accounts": [
+    {
+      "email": "frost.wolf@protonmail.com",
+      "name": "Пользователь 1",
+      "uid": "user-01",
+      "password": "Fw9#kL2!vN8@qR"
+    },
+    {
+      "email": "north.star@outlook.com",
+      "name": "Пользователь 2",
+      "uid": "user-02",
+      "password": "Ns3%pT7&wM4#jK"
+    },
+    {
+      "email": "polar.bear@gmail.com",
+      "name": "Пользователь 3",
+      "uid": "user-03",
+      "password": "Pb6@mQ1!zX9%rD"
+    },
+    {
+      "email": "snow.owl@yandex.ru",
+      "name": "Пользователь 4",
+      "uid": "user-04",
+      "password": "So4#vH8&nP2!kL"
+    },
+    {
+      "email": "ice.fox@mail.ru",
+      "name": "Пользователь 5",
+      "uid": "user-05",
+      "password": "If7%rB3@wT6#mQ"
+    },
+    {
+      "email": "winter.deer@icloud.com",
+      "name": "Пользователь 6",
+      "uid": "user-06",
+      "password": "Wd2!yN9@kL5&pV"
+    }
+  ]
+}
