@@ -146,9 +146,16 @@ td { padding: 14px 16px; border-top: 1px solid var(--border); font-size: 13px; }
 
 <div class="container">
   <div class="name-bar">
-    <label>Ваше имя:</label>
-    <input type="text" id="myName" placeholder="Например: Паша" value="Паша">
-    <span style="color:var(--muted);font-size:12px">Используется, чтобы отмечать, кто на каком прокси</span>
+    <label>Кто подключается:</label>
+    <select id="myUid" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text)">
+      <option value="user-01">Пользователь 1 (frost.wolf@protonmail.com)</option>
+      <option value="user-02">Пользователь 2 (north.star@outlook.com)</option>
+      <option value="user-03">Пользователь 3 (polar.bear@gmail.com)</option>
+      <option value="user-04">Пользователь 4 (snow.owl@yandex.ru)</option>
+      <option value="user-05">Пользователь 5 (ice.fox@mail.ru)</option>
+      <option value="user-06">Пользователь 6 (winter.deer@icloud.com)</option>
+    </select>
+    <span style="color:var(--muted);font-size:12px">Команда придёт только выбранному аккаунту</span>
   </div>
 
   <div class="name-bar" style="border-color:#7c3aed">
@@ -197,6 +204,18 @@ td { padding: 14px 16px; border-top: 1px solid var(--border); font-size: 13px; }
 const REPO = "jkun1337-max/my-vpn-app";
 const FILE = "status.json";
 const API = `https://api.github.com/repos/${REPO}/contents/${FILE}`;
+
+// Аккаунты и их ID (должны совпадать с приложением)
+const ACCOUNTS = {
+  'user-01': 'Пользователь 1',
+  'user-02': 'Пользователь 2',
+  'user-03': 'Пользователь 3',
+  'user-04': 'Пользователь 4',
+  'user-05': 'Пользователь 5',
+  'user-06': 'Пользователь 6'
+};
+function myUid() { return document.getElementById('myUid').value; }
+function myName() { return ACCOUNTS[myUid()] || myUid(); }
 
 function getToken() {
   return localStorage.getItem('snowvpn_token') || '';
@@ -319,7 +338,7 @@ function render() {
       totalConn += users.length;
       const usersText = users.length ? users.join(", ") : "—";
       const key = p.host + ":" + p.port;
-      const myName = document.getElementById("myName").value.trim();
+      const myName = myName();
       const iAmHere = users.includes(myName);
       const full = users.length >= 3;
 
@@ -352,30 +371,32 @@ function render() {
 }
 
 function connectToProxy(key) {
-  const myName = document.getElementById("myName").value.trim();
-  if (!myName) { setMsg("Введи своё имя сверху", "error"); return; }
+  const uid = myUid();
+  const name = myName();
+  if (!uid) { setMsg("Выбери аккаунт сверху", "error"); return; }
 
   // убираем пользователя со всех прокси
-  currentData.connections = currentData.connections.filter(c => c.user !== myName);
+  currentData.connections = currentData.connections.filter(c => c.user !== name);
   // добавляем на выбранный
   const [host, port] = key.split(":");
   currentData.connections.push({
-    user: myName,
+    user: name,
     proxy: key,
     country: (PROXIES.find(p => p.host === host && String(p.port) === port) || {}).country || "",
     since: new Date().toLocaleTimeString()
   });
 
-  // команда для Windows-приложения
-  currentData.commands[myName] = { action: "connect", host: host, port: Number(port) };
+  // команда ТОЛЬКО выбранному аккаунту (по UID)
+  currentData.commands[uid] = { action: "connect", host: host, port: Number(port) };
 
   saveAll().then(render);
 }
 
 function disconnectFromProxy(key) {
-  const myName = document.getElementById("myName").value.trim();
-  currentData.connections = currentData.connections.filter(c => c.user !== myName);
-  currentData.commands[myName] = { action: "disconnect" };
+  const uid = myUid();
+  const name = myName();
+  currentData.connections = currentData.connections.filter(c => c.user !== name);
+  currentData.commands[uid] = { action: "disconnect" };
   saveAll().then(render);
 }
 
