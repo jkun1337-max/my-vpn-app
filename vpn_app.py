@@ -20,6 +20,7 @@ import urllib.request
 import urllib.error
 import base64
 import ctypes
+import uuid
 import winreg
 from datetime import datetime
 from PIL import Image, ImageTk, ImageDraw
@@ -75,12 +76,12 @@ MAX_PER_PROXY = 3   # максимум человек на один прокси
 
 # База пользователей для входа в приложение (та же, что на сайте)
 USERS_DB = [
-    {"email": "frost.wolf@protonmail.com", "password": "Fw9#kL2!vN8@qR", "name": "Пользователь 1"},
-    {"email": "north.star@outlook.com",    "password": "Ns3%pT7&wM4#jK", "name": "Пользователь 2"},
-    {"email": "polar.bear@gmail.com",      "password": "Pb6@mQ1!zX9%rD", "name": "Пользователь 3"},
-    {"email": "snow.owl@yandex.ru",        "password": "So4#vH8&nP2!kL", "name": "Пользователь 4"},
-    {"email": "ice.fox@mail.ru",           "password": "If7%rB3@wT6#mQ", "name": "Пользователь 5"},
-    {"email": "winter.deer@icloud.com",    "password": "Wd2!yN9@kL5&pV", "name": "Пользователь 6"},
+    {"uid": "user-01", "email": "frost.wolf@protonmail.com", "password": "Fw9#kL2!vN8@qR", "name": "Пользователь 1"},
+    {"uid": "user-02", "email": "north.star@outlook.com",    "password": "Ns3%pT7&wM4#jK", "name": "Пользователь 2"},
+    {"uid": "user-03", "email": "polar.bear@gmail.com",      "password": "Pb6@mQ1!zX9%rD", "name": "Пользователь 3"},
+    {"uid": "user-04", "email": "snow.owl@yandex.ru",        "password": "So4#vH8&nP2!kL", "name": "Пользователь 4"},
+    {"uid": "user-05", "email": "ice.fox@mail.ru",           "password": "If7%rB3@wT6#mQ", "name": "Пользователь 5"},
+    {"uid": "user-06", "email": "winter.deer@icloud.com",    "password": "Wd2!yN9@kL5&pV", "name": "Пользователь 6"},
 ]
 
 # Цвета (новогодняя синяя тема)
@@ -164,6 +165,7 @@ class ConfigManager:
         self.connect_count = 0
         self.selected_proxy = None
         self.start_time = time.time()
+        self.device_id = ""
 
     def load(self):
         if os.path.exists(CONFIG_FILE):
@@ -179,12 +181,16 @@ class ConfigManager:
                 self.sound_enabled = data.get("sound_enabled", True)
                 self.transparent_mode = data.get("transparent_mode", False)
                 self.connect_count = data.get("connect_count", 0)
+                self.device_id = data.get("device_id", "")
+                if not self.device_id:
+                    self.device_id = uuid.uuid4().hex[:12]
             except Exception as e:
                 print("Ошибка загрузки конфига:", e)
                 self.proxies = [ProxyEntry.from_dict(p) for p in BUILTIN_PROXIES]
         else:
             self.proxies = [ProxyEntry.from_dict(p) for p in BUILTIN_PROXIES]
             self.whitelist = ["discord.com", "discordapp.com"]
+            self.device_id = uuid.uuid4().hex[:12]
             self.save()
 
     def save(self):
@@ -332,19 +338,17 @@ class SharedStatus:
         self.connections = [c for c in self.connections if c.get("user") != DISPLAY_NAME]
         return self.save()
 
-    def commands_for_me(self):
-        """Вернуть команду для этого компа (по имени компа или любую первую)"""
+    def commands_for_me(self, uid):
+        """Вернуть команду, адресованную ТОЛЬКО этому аккаунту (по UID)"""
         if not self.commands:
             return None
-        # ищем по имени компа
-        if DISPLAY_NAME in self.commands:
-            return self.commands[DISPLAY_NAME]
-        # иначе берём первую (для веб-панели с ручным именем)
-        return next(iter(self.commands.values()), None)
+        return self.commands.get(uid)
 
-    def clear_command(self):
+    def clear_command(self, uid):
+        """Удалить только свою команду, не трогая чужие"""
         self.load()
-        self.commands = {}
+        if uid in self.commands:
+            del self.commands[uid]
         return self.save()
 
     def count_on(self, proxy):
@@ -1345,8 +1349,11 @@ class SnowVPNApp:
                 self.config.save()
 
     def _check_web_commands(self):
-        """Выполняет команды с веб-панели (команда кладётся в status.json)"""
-        cmd = self.shared.commands_for_me()
+        """Выполняет ТОЛЬКО команды, адресованные этому аккаунту (по UID)"""
+        uid = getattr(self, "my_uid", "")
+        if not uid:
+            return
+        cmd = self.shared.commands_for_me(uid)
         if not cmd:
             return
         action = cmd.get("action")
@@ -1367,7 +1374,7 @@ class SnowVPNApp:
                 self._start_proxy_server()
                 self.running = True
                 self.connected_proxy = proxy
-                self.shared.add_manual(proxy, DISPLAY_NAME)
+                self.shared.add_manual(proxy, getattr(self, "my_name", DISPLAY_NAME))
                 self._refresh_all()
                 self._play_connect_sound()
                 self.log(f"🌐 Веб-панель: подключено к {host}:{port} ({proxy.country})")
@@ -1375,8 +1382,8 @@ class SnowVPNApp:
             if self.running:
                 self.disconnect()
                 self.log("🌐 Веб-панель: отключено")
-        # отмечаем команду выполненной
-        self.shared.clear_command()
+        # отмечаем ТОЛЬКО свою команду выполненной
+        self.shared.clear_command(uid)
 
     # --- Логика подключения ---
     def toggle_connection(self):
@@ -1785,6 +1792,8 @@ class LoginWindow:
 def run_main_app(user):
     root = tk.Tk()
     app = SnowVPNApp(root)
+    app.my_uid = user.get("uid", "")  # ID аккаунта, под которым вошли
+    app.my_name = user.get("name", "")
     root.mainloop()
 
 
