@@ -111,6 +111,12 @@
       "name": "Пользователь 6",
       "uid": "user-06",
       "password": "Wd2!yN9@kL5&pV"
+    },
+    {
+      "uid": "1111111111",
+      "email": "1",
+      "password": "1",
+      "name": "1"
     }
   ]
 }
