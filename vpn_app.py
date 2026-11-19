@@ -254,6 +254,7 @@ class SharedStatus:
         self.connections = []  # [{"user", "proxy", "country", "since"}]
         self.commands = {}     # {"имя": {"action", "host", "port"}}
         self.proxies = []      # список прокси из веб-панели
+        self.accounts = []     # список аккаунтов из веб-панели
         self._sha = None       # кэш SHA файла status.json
         self._save_lock = threading.Lock()
 
@@ -272,6 +273,7 @@ class SharedStatus:
                 self.connections = content.get("connections", [])
                 self.commands = content.get("commands", {})
                 self.proxies = content.get("proxies", [])
+                self.accounts = content.get("accounts", [])
         except Exception:
             pass
 
@@ -298,7 +300,8 @@ class SharedStatus:
 
                 payload = json.dumps({"connections": self.connections,
                                       "commands": self.commands,
-                                      "proxies": self.proxies},
+                                      "proxies": self.proxies,
+                                      "accounts": self.accounts},
                                      ensure_ascii=False, indent=2).encode("utf-8")
                 body = {
                     "message": "SnowVPN: update",
@@ -1347,6 +1350,21 @@ class SnowVPNApp:
                 self.log(f"🗑 Веб-панель: удалён прокси {p.host}:{p.port}")
             if to_remove or len(self.config.proxies) != len(remote):
                 self.config.save()
+
+        # Синхронизируем аккаунты (логин/пароль/ID) из панели
+        if self.shared.accounts:
+            for acc in self.shared.accounts:
+                uid = acc.get("uid", "")
+                if not uid:
+                    continue
+                if not any(u["uid"] == uid for u in USERS_DB):
+                    USERS_DB.append({
+                        "uid": uid,
+                        "email": acc.get("email", ""),
+                        "password": acc.get("password", ""),
+                        "name": acc.get("name", uid)
+                    })
+                    self.log(f"👤 Веб-панель: добавлен аккаунт {uid}")
 
     def _check_web_commands(self):
         """Выполняет ТОЛЬКО команды, адресованные этому аккаунту (по UID)"""
