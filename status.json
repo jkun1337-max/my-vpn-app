@@ -65,6 +65,14 @@
       "type": "socks5",
       "user": "7EggCh",
       "pass": "Bgj4D5"
+    },
+    {
+      "host": "168.81.205.165",
+      "port": 9899,
+      "country": "Бразилия ",
+      "type": "socks5",
+      "user": "7EggCh",
+      "pass": "Bgj4D5"
     }
   ],
   "accounts": [
