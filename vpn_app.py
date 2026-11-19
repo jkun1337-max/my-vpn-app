@@ -10,6 +10,7 @@ import socket
 import threading
 import time
 import os
+import sys
 import struct
 import socketserver
 import random
@@ -19,11 +20,13 @@ import urllib.request
 import urllib.error
 import base64
 import ctypes
+import winreg
 from datetime import datetime
-from PIL import Image, ImageTk
+from PIL import Image, ImageTk, ImageDraw
+import pystray
+from pystray import MenuItem as item
 
-# Загружаем фон один раз (чтобы не удалялся сборщиком мусора)
-BG_IMAGE = None
+# Путь к фон ищём сразу, но сам PhotoImage создадим позже — когда окно Tk уже есть.
 def _find_bg():
     import sys as _sys
     candidates = ["background.png"]
@@ -37,14 +40,7 @@ def _find_bg():
             return c
     return None
 
-try:
-    _bg_path = _find_bg()
-    if _bg_path:
-        BG_IMAGE = ImageTk.PhotoImage(Image.open(_bg_path).convert("RGB"))
-    else:
-        print("Фон не найден")
-except Exception as e:
-    print("Фон не загружен:", e)
+BG_IMAGE = None  # создаётся в VPNApp.__init__ после root
 
 # -----------------------------
 # Константы
@@ -94,12 +90,12 @@ BORDER = "#1e293b"
 
 # Вшитые прокси (чтобы работало даже без config.json у друга)
 BUILTIN_PROXIES = [
-    {"host": "138.219.122.200", "port": 9148, "user": "7Kufgp", "password": "KJwuh8", "country": "Канада", "type": "socks5"},
-    {"host": "200.71.127.25", "port": 9979, "user": "7Kufgp", "password": "KJwuh8", "country": "Канада", "type": "socks5"},
-    {"host": "168.196.237.162", "port": 9302, "user": "7Kufgp", "password": "KJwuh8", "country": "Канада", "type": "socks5"},
-    {"host": "168.196.237.129", "port": 9946, "user": "7Kufgp", "password": "KJwuh8", "country": "Канада", "type": "socks5"},
-    {"host": "193.32.154.106", "port": 9239, "user": "2t0GU9", "password": "B4fozL", "country": "Украина", "type": "socks5"},
-    {"host": "193.32.152.105", "port": 9989, "user": "2t0GU9", "password": "B4fozL", "country": "Украина", "type": "socks5"},
+    {"host": "138.219.122.200", "port": 9148, "user": "7Kufgp", "password": "KJwuh8", "country": "Канада", "type": "http"},
+    {"host": "200.71.127.25", "port": 9979, "user": "7Kufgp", "password": "KJwuh8", "country": "Канада", "type": "http"},
+    {"host": "168.196.237.162", "port": 9302, "user": "7Kufgp", "password": "KJwuh8", "country": "Канада", "type": "http"},
+    {"host": "168.196.237.129", "port": 9946, "user": "7Kufgp", "password": "KJwuh8", "country": "Канада", "type": "http"},
+    {"host": "193.32.154.106", "port": 9239, "user": "2t0GU9", "password": "B4fozL", "country": "Украина", "type": "http"},
+    {"host": "193.32.152.105", "port": 9989, "user": "2t0GU9", "password": "B4fozL", "country": "Украина", "type": "http"},
 ]
 
 DEFAULT_CONFIG = {
@@ -195,10 +191,9 @@ class ConfigManager:
             json.dump(data, f, ensure_ascii=False, indent=2)
 
     def get_available(self, country=None):
+        """Все прокси (или по стране). Занятость определяется по общему статусу, не по локальному busy."""
         result = []
         for p in self.proxies:
-            if p.busy:
-                continue
             if country and p.country != country:
                 continue
             result.append(p)
@@ -243,53 +238,68 @@ class SharedStatus:
         self.connections = []  # [{"user", "proxy", "country", "since"}]
         self.commands = {}     # {"имя": {"action", "host", "port"}}
         self.proxies = []      # список прокси из веб-панели
+        self._sha = None       # кэш SHA файла status.json
+        self._save_lock = threading.Lock()
 
     def load(self):
         if not GITHUB_TOKEN:
             return
         try:
-            req = urllib.request.Request(STATUS_RAW_URL, headers={"User-Agent": "SnowVPN"})
-            with urllib.request.urlopen(req, timeout=5) as r:
-                data = json.loads(r.read().decode("utf-8"))
-                self.connections = data.get("connections", [])
-                self.commands = data.get("commands", {})
-                self.proxies = data.get("proxies", [])
+            # используем API сразу — он даёт и contenido и SHA
+            req = urllib.request.Request(STATUS_API_URL,
+                headers={"User-Agent": "SnowVPN",
+                         "Authorization": f"Bearer {GITHUB_TOKEN}"})
+            with urllib.request.urlopen(req, timeout=3) as r:
+                d = json.loads(r.read().decode("utf-8"))
+                self._sha = d.get("sha")
+                content = json.loads(base64.b64decode(d.get("content", "")))
+                self.connections = content.get("connections", [])
+                self.commands = content.get("commands", {})
+                self.proxies = content.get("proxies", [])
         except Exception:
             pass
 
     def save(self):
+        """Асинхронная запись — не блокирует GUI"""
         if not GITHUB_TOKEN:
             return False
-        try:
-            # сперва подтягиваем свежую версию, чтобы не затирать чужие изменения
-            self.load()
-            payload = json.dumps({"connections": self.connections,
-                                  "commands": self.commands,
-                                  "proxies": self.proxies},
-                                 ensure_ascii=False, indent=2).encode("utf-8")
-            body = {
-                "message": "SnowVPN: update",
-                "content": base64.b64encode(payload).decode("ascii")
-            }
+        threading.Thread(target=self._save_sync, daemon=True).start()
+        return True
+
+    def _save_sync(self):
+        with self._save_lock:
             try:
-                req = urllib.request.Request(STATUS_API_URL,
+                # подтягиваем свежий SHA перед записью
+                try:
+                    req = urllib.request.Request(STATUS_API_URL,
+                        headers={"User-Agent": "SnowVPN",
+                                 "Authorization": f"Bearer {GITHUB_TOKEN}"})
+                    with urllib.request.urlopen(req, timeout=3) as r:
+                        d = json.loads(r.read().decode("utf-8"))
+                        self._sha = d.get("sha")
+                except Exception:
+                    pass
+
+                payload = json.dumps({"connections": self.connections,
+                                      "commands": self.commands,
+                                      "proxies": self.proxies},
+                                     ensure_ascii=False, indent=2).encode("utf-8")
+                body = {
+                    "message": "SnowVPN: update",
+                    "content": base64.b64encode(payload).decode("ascii")
+                }
+                if self._sha:
+                    body["sha"] = self._sha
+                data = json.dumps(body).encode("utf-8")
+                req = urllib.request.Request(STATUS_API_URL, data=data, method="PUT",
                     headers={"User-Agent": "SnowVPN",
-                             "Authorization": f"Bearer {GITHUB_TOKEN}"})
-                with urllib.request.urlopen(req, timeout=5) as r:
-                    cur = json.loads(r.read().decode("utf-8"))
-                    body["sha"] = cur.get("sha")
-            except Exception:
-                pass
-            data = json.dumps(body).encode("utf-8")
-            req = urllib.request.Request(STATUS_API_URL, data=data, method="PUT",
-                headers={"User-Agent": "SnowVPN",
-                         "Authorization": f"Bearer {GITHUB_TOKEN}",
-                         "Content-Type": "application/json"})
-            with urllib.request.urlopen(req, timeout=5) as r:
-                return True
-        except Exception as e:
-            print("Ошибка сохранения статуса:", e)
-            return False
+                             "Authorization": f"Bearer {GITHUB_TOKEN}",
+                             "Content-Type": "application/json"})
+                with urllib.request.urlopen(req, timeout=3) as r:
+                    resp = json.loads(r.read().decode("utf-8"))
+                    self._sha = resp.get("content", {}).get("sha", self._sha)
+            except Exception as e:
+                print("Ошибка сохранения статуса:", e)
 
     def add(self, proxy):
         """Локальное подключение — от имени этого компа"""
@@ -533,12 +543,19 @@ class ThreadedTCPServer(socketserver.ThreadingTCPServer):
 # -----------------------------
 class SnowVPNApp:
     def __init__(self, root):
+        global BG_IMAGE
         self.root = root
+        # Теперь root есть — можно безопасно создать картинку
+        _bg_path = _find_bg()
+        if _bg_path:
+            try:
+                BG_IMAGE = ImageTk.PhotoImage(Image.open(_bg_path).convert("RGB"))
+            except Exception as e:
+                print("Фон не загружен:", e)
         self.root.title(f"{APP_TITLE} v{APP_VERSION}")
         self.root.geometry("1000x700")
-        self.root.resizable(False, False)  # запрет разворачивания на весь экран
+        self.root.resizable(True, True)  # можно разворачивать на весь экран
         self.root.configure(bg=BG_DARK)
-        self._setup_window_style()
 
         self.config = ConfigManager()
         self.config.load()
@@ -550,14 +567,21 @@ class SnowVPNApp:
         self.server = None
         self.running = False
         self.connected_proxy = None
+        self.connect_start = None
         self.animation_running = True
         self.pulse_state = 0.0
         self.current_tab = "Главная"
+        self.tray_icon = None
 
         self._build_ui()
-        self._start_pulse()
+        # рисуем главную сразу (Configure-event может не сработать сразу)
+        self.root.update_idletasks()
+        if hasattr(self, "home_canvas"):
+            self._redraw_home(self.home_canvas.winfo_width(), self.home_canvas.winfo_height())
         self._refresh_all()
         self._start_status_refresh()
+        self._tick_uptime()
+        self._setup_tray()
 
         if not GITHUB_TOKEN:
             self.log("⚠️ Вставь GitHub-токен в код, чтобы видеть подключения друга")
@@ -566,6 +590,48 @@ class SnowVPNApp:
 
         if self.config.auto_connect and self.config.get_available():
             self.root.after(1500, self.quick_connect)
+
+    # --- Скрытие в системный трей ---
+    def _make_tray_image(self):
+        img = Image.new("RGB", (64, 64), "#0b1220")
+        d = ImageDraw.Draw(img)
+        d.ellipse([8, 8, 56, 56], fill="#0ea5e9")
+        # простая⑥-иконка снежинки
+        d.line([(32, 16), (32, 48)], fill="white", width=4)
+        d.line([(16, 32), (48, 32)], fill="white", width=4)
+        d.line([(20, 20), (44, 44)], fill="white", width=4)
+        d.line([(44, 20), (20, 44)], fill="white", width=4)
+        return img
+
+    def _setup_tray(self):
+        try:
+            menu = pystray.Menu(
+                item("Показать", lambda icon, it: self._show_from_tray()),
+                item("Выход", lambda icon, it: self._quit_app())
+            )
+            self.tray_icon = pystray.Icon("SnowVPN", self._make_tray_image(),
+                                          "SnowVPN", menu)
+            threading.Thread(target=self.tray_icon.run, daemon=True).start()
+            # при закрытии окна — сворачивать в трей
+            self.root.protocol("WM_DELETE_WINDOW", self._hide_to_tray)
+        except Exception as e:
+            print("Трей не запущен:", e)
+
+    def _hide_to_tray(self):
+        self.root.withdraw()  # скрыть окно
+
+    def _show_from_tray(self):
+        self.root.after(0, self.root.deiconify)  # показать окно
+
+    def _quit_app(self):
+        if self.running:
+            self.root.after(0, self.disconnect)
+        if self.tray_icon:
+            try:
+                self.tray_icon.stop()
+            except Exception:
+                pass
+        self.root.after(0, self.root.destroy)
 
     def _setup_window_style(self):
         """Скруглённые углы окна и запрет максимизации (Windows 10/11)"""
@@ -591,8 +657,24 @@ class SnowVPNApp:
         except Exception as e:
             print("Стиль окна не применён:", e)
 
+    def _setup_styles(self):
+        """Тёмные стили для ttk-виджетов (таблица, комбобоксы)"""
+        style = ttk.Style()
+        style.theme_use("clam")
+        style.configure("Treeview",
+                        background=CARD_BG, fieldbackground=CARD_BG,
+                        foreground=TEXT, borderwidth=0, rowheight=26,
+                        font=("Segoe UI", 10))
+        style.map("Treeview", background=[("selected", ACCENT)])
+        style.configure("Treeview.Heading",
+                        background=SIDEBAR_BG, foreground=ACCENT,
+                        font=("Segoe UI", 10, "bold"))
+        style.configure("TCombobox", fieldbackground=CARD_BG,
+                        background=CARD_BG, foreground=TEXT)
+
     # --- Построение интерфейса ---
     def _build_ui(self):
+        self._setup_styles()
         # Верхняя панель
         top_bar = tk.Frame(self.root, bg=SIDEBAR_BG, height=64)
         top_bar.pack(fill=tk.X, side=tk.TOP)
@@ -662,133 +744,270 @@ class SnowVPNApp:
         self.tabs["home"].pack(fill=tk.BOTH, expand=True)
         self.tab_buttons["home"].config(bg=ACCENT, fg="white")
 
-        # Декор на главной вкладке: ёлка и снеговик
-        if self.snow_canvases:
-            home_canvas = self.snow_canvases[0]
-            self._draw_tree(home_canvas, 40, 30)
-            self._draw_snowman(home_canvas, 690, 30)
-
-        self._start_snow()
-
-    # --- Слой снега для вкладки ---
-    def _add_snow_layer(self, frame):
+    # --- Слой снега для вкладки (фон-картинка, самый нижний, не ловит клики) ---
+    def _add_snow_layer(self, frame, interactive=True):
         canvas = tk.Canvas(frame, bg=BG_DARK, highlightthickness=0)
-        canvas.place(x=0, y=0, relwidth=1, relheight=1)
-        if BG_IMAGE:
-            canvas.create_image(0, 0, image=BG_IMAGE, anchor="nw", tags="bg")
+        if interactive:
+            canvas.pack(fill=tk.BOTH, expand=True)  # главная: клики по canvas
+        else:
+            # остальные вкладки: фон через place, но не перехватывает клики
+            canvas.place(x=0, y=0, relwidth=1, relheight=1)
+            canvas.bindtags(("all",))
         self.snow_canvases.append(canvas)
         return canvas
 
-    # --- Вкладка: Главная ---
+    def _paint_bg(self, canvas, w, h):
+        """Масштабирует фон под текущий размер canvas"""
+        try:
+            src = Image.open(_find_bg()).convert("RGB").resize((w, h))
+            self._bg_scaled = ImageTk.PhotoImage(src)
+            canvas.create_image(0, 0, image=self._bg_scaled, anchor="nw", tags="bg")
+        except Exception:
+            if BG_IMAGE:
+                canvas.create_image(0, 0, image=BG_IMAGE, anchor="nw", tags="bg")
+
+    # --- Вкладка: Главная (авто-масштаб под размер окна) ---
     def _build_home_tab(self):
         frame = tk.Frame(self.content, bg=BG_DARK)
-        self._add_snow_layer(frame)
+        c = self._add_snow_layer(frame)
+        self.home_canvas = c
+        c.bind("<Configure>", lambda e: self._redraw_home(e.width, e.height))
+        return frame
 
-        # Верхние индикаторы
-        top = tk.Frame(frame, bg=BG_DARK)
-        top.pack(fill=tk.X, padx=25, pady=15)
+    def _redraw_home(self, w, h):
+        c = self.home_canvas
+        if getattr(self, "_home_size", None) == (w, h):
+            return
+        self._home_size = (w, h)
+        c.delete("all")
 
-        self.my_ip_card = self._make_info_card(top, "🛡️", "Ваш IP", "—", ACCENT)
-        self.my_ip_card.pack(side=tk.LEFT, padx=(0, 12))
-        self.server_card = self._make_info_card(top, "🌐", "Сервер", "Не выбрано", SUCCESS)
-        self.server_card.pack(side=tk.LEFT)
+        # Чёрный фон (без картинки)
+        c.create_rectangle(0, 0, w, h, fill="#080c14", tags="bgfill")
 
-        # Карточки слева + кнопка по центру
-        mid = tk.Frame(frame, bg=BG_DARK)
-        mid.pack(fill=tk.BOTH, expand=True, padx=25, pady=10)
+        # Белые точки (статичные, без анимации)
+        random.seed(7)
+        for _ in range(70):
+            x = random.randint(0, w)
+            y = random.randint(0, int(h * 0.8))
+            rr = random.choice([1, 1, 1, 2])
+            br = random.choice(["#2a3446", "#3a4a63", "#50617d"])
+            c.create_oval(x, y, x + rr, y + rr, fill=br, tags="dots")
+
+        # Сугроб внизу
+        snow_y = int(h * 0.82)
+        c.create_polygon(
+            0, snow_y + 30,
+            int(w * 0.2), snow_y - 10,
+            int(w * 0.45), snow_y + 20,
+            int(w * 0.7), snow_y - 15,
+            w, snow_y + 25,
+            w, h, 0, h,
+            fill="#dbe6f2", tags="snowhill"
+        )
+
+        pad = max(20, int(w * 0.03))
+        card_w = max(150, int(w * 0.26))
+
+        # Верхние карточки: IP / Сервер / Время работы
+        self._draw_canvas_card(c, pad, pad, card_w, 56, "\U0001f6e1\ufe0f", "Ваш IP", "—", ACCENT, "ip")
+        self._draw_canvas_card(c, pad + card_w + 12, pad, card_w, 56, "\U0001f310", "Сервер", "Не выбрано", SUCCESS, "server")
+        self._draw_canvas_card(c, pad + 2 * (card_w + 12), pad, card_w, 56,
+                               "\u23f1", "Время работы", "00:00:00", WARNING, "uptime")
 
         # Левые карточки
-        left_cards = tk.Frame(mid, bg=BG_DARK)
-        left_cards.pack(side=tk.LEFT, fill=tk.Y)
+        for i, (icon, text, color) in enumerate([
+            ("\u26a1", "Высокая скорость", ACCENT),
+            ("\U0001f512", "Защита данных", SUCCESS),
+            ("\U0001f6ab", "Без логов", ERROR),
+        ]):
+            y = pad + 100 + i * 72
+            c.create_rectangle(pad, y, pad + card_w, y + 56, fill="#111a2b", outline="#22304d")
+            c.create_text(pad + 18, y + 28, text=icon, fill=color,
+                          font=("Segoe UI Emoji", 19), anchor="w")
+            c.create_text(pad + 55, y + 28, text=text, fill=TEXT,
+                          font=("Segoe UI", 10, "bold"), anchor="w")
 
-        self._make_feature_card(left_cards, "⚡", "Высокая скорость", ACCENT)
-        self._make_feature_card(left_cards, "🔒", "Защита данных", SUCCESS)
-        self._make_feature_card(left_cards, "🚫", "Без логов", ERROR)
+        # Переключатель OFF / ON (закруглённый) — центр
+        cx, cy = int(w * 0.68), int(h * 0.45)
+        tw, th = 220, 84
+        self.toggle_bg = c.create_rounded_rectangle if hasattr(c, "create_rounded_rectangle") else None
 
-        # Центр — кнопка питания
-        center = tk.Frame(mid, bg=BG_DARK)
-        center.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        def round_rect(x1, y1, x2, y2, r=40, **kw):
+            pts = []
+            for xx, yy, dir in [(x2, y2, 0), (x1, y2, 1), (x1, y1, 2), (x2, y1, 3)]:
+                pass
+            # простой скруглённый прямоугольник через полигон+дуги
+            return c.create_oval(x1, y1, x1 + 2 * r, y1 + 2 * r, **kw)
 
-        self.power_canvas = tk.Canvas(center, width=260, height=260, bg=BG_DARK, highlightthickness=0)
-        self.power_canvas.pack(pady=20)
+        # рисуем «таблетку»
+        self.switch_track = c.create_oval(cx - tw // 2, cy - th // 2,
+                                          cx - tw // 2 + th, cy + th // 2,
+                                          fill="#2a3446", outline="")
+        c.create_oval(cx + tw // 2 - th, cy - th // 2,
+                      cx + tw // 2, cy + th // 2, fill="#2a3446", outline="")
+        c.create_rectangle(cx - tw // 2 + th // 2, cy - th // 2,
+                           cx + tw // 2 - th // 2, cy + th // 2, fill="#2a3446", outline="")
+        self.switch_off_x = cx - tw // 2 + th // 2
+        self.switch_on_x = cx + tw // 2 - th // 2
+        self.switch_off_y = cy
+        self.switch_on_y = cy
+        self.switch_knob = c.create_oval(self.switch_off_x - 34, cy - 34,
+                                         self.switch_off_x + 34, cy + 34,
+                                         fill="#8899b0", outline="")
+        self.switch_label = c.create_text(cx, cy, text="OFF", fill="#cbd5e1",
+                                          font=("Segoe UI", 18, "bold"))
+        # клик по всей таблетке
+        for it in (self.switch_track, self.switch_knob, self.switch_label):
+            c.tag_bind(it, "<Button-1>", lambda e: self.toggle_connection())
+            c.tag_bind(it, "<Enter>", lambda e: c.config(cursor="hand2"))
+            c.tag_bind(it, "<Leave>", lambda e: c.config(cursor=""))
 
-        self.power_glow = self.power_canvas.create_oval(30, 30, 230, 230, fill="#142033", outline="")
-        self.power_ring = self.power_canvas.create_oval(50, 50, 210, 210, fill="#111c2f",
-                                                        outline=ACCENT, width=4)
-        self.power_icon = self.power_canvas.create_text(130, 130, text="⏻", fill=TEXT,
-                                                        font=("Segoe UI", 78))
+        self.home_status = c.create_text(cx, cy + th // 2 + 28, text="Отключено",
+                                         fill=TEXT_MUTED, font=("Segoe UI", 12))
 
-        self.power_canvas.tag_bind(self.power_ring, "<Button-1>", lambda e: self.toggle_connection())
-        self.power_canvas.tag_bind(self.power_icon, "<Button-1>", lambda e: self.toggle_connection())
-        self.power_canvas.tag_bind(self.power_glow, "<Button-1>", lambda e: self.toggle_connection())
+        # Кнопка "Проверить IP"
+        bw = 190
+        self._draw_canvas_button(c, cx - bw // 2, cy + th // 2 + 50, bw, 42,
+                                 "\U0001f50e  Проверить IP",
+                                 self.check_ip)
 
-        self.home_status = tk.Label(center, text="Отключено", bg=BG_DARK, fg=TEXT_MUTED,
-                                    font=("Segoe UI", 12))
-        self.home_status.pack(pady=(0, 15))
+        # Выбор страны
+        countries = sorted(set(p.country for p in self.config.proxies)) or ["Нет прокси"]
+        self.country_var = tk.StringVar()
+        self.country_combo = ttk.Combobox(c, textvariable=self.country_var,
+                                          values=countries, state="readonly", width=18)
+        if self.config.last_country in countries:
+            self.country_combo.set(self.config.last_country)
+        else:
+            self.country_combo.set(countries[0])
+        self.country_combo.bind("<<ComboboxSelected>>", self.on_country_selected)
+        c.create_window(cx, cy + th // 2 + 100, window=self.country_combo, anchor="center")
 
-        # Кнопка "Выбрать сервер"
-        self.btn_choose_server = tk.Button(
-            center, text="☰  Выбрать сервер  ▾",
-            bg=CARD_BG2, fg=TEXT, activebackground=ACCENT2,
-            relief="flat", font=("Segoe UI", 11), cursor="hand2",
-            padx=20, pady=9, bd=0, highlightthickness=1,
-            highlightbackground=BORDER,
-            command=lambda: self.switch_tab("servers", "Серверы")
-        )
-        self.btn_choose_server.pack()
+        # Нижние кнопки
+        n = 3
+        bw2 = min(170, (w - pad * 2 - 20) // n)
+        gap = 8
+        total = bw2 * n + gap * (n - 1)
+        startx = (w - total) // 2
+        by = h - 58
+        self._draw_canvas_button(c, startx, by, bw2, 44, "\U0001f4cb  Белый список",
+                                 lambda: self.switch_tab("whitelist", "Белый список"))
+        self._draw_canvas_button(c, startx + bw2 + gap, by, bw2, 44, "\U0001f50d  Прозрачный режим",
+                                 self.toggle_transparent)
+        self._draw_canvas_button(c, startx + 2 * (bw2 + gap), by, bw2, 44, "\u26a1  Автоподключение",
+                                 self.toggle_auto)
 
-        # Нижние переключатели
-        bottom = tk.Frame(frame, bg=BG_DARK)
-        bottom.pack(fill=tk.X, padx=25, pady=(0, 15))
+        self._refresh_all()
 
-        self._make_toggle(bottom, "📋", "Белый список", "включено",
-                          lambda: self.switch_tab("whitelist", "Белый список"))
-        self._make_toggle(bottom, "🔍", "Прозрачный режим",
-                          "вкл" if self.config.transparent_mode else "выкл",
-                          self.toggle_transparent)
-        self.auto_toggle = self._make_toggle(bottom, "⚡", "Автоподключение",
-                          "вкл" if self.config.auto_connect else "выкл",
-                          self.toggle_auto)
-        return frame
+    def _draw_canvas_card(self, c, x, y, w, h, icon, title, value, color, tag):
+        c.create_rectangle(x, y, x + w, y + h, fill="#152038", outline="#22304d")
+        c.create_text(x + 22, y + h // 2, text=icon, fill=color,
+                      font=("Segoe UI Emoji", 20), anchor="w")
+        c.create_text(x + 55, y + 18, text=title, fill=TEXT_MUTED,
+                      font=("Segoe UI", 9), anchor="w")
+        val = c.create_text(x + 55, y + 40, text=value, fill=color,
+                            font=("Segoe UI", 11, "bold"), anchor="w")
+        setattr(self, f"home_{tag}_val", val)
 
-    # --- Вкладка: Серверы ---
+    def _draw_canvas_button(self, c, x, y, w, h, text, command):
+        rect = c.create_rectangle(x, y, x + w, y + h, fill="#1b2a45",
+                                  outline="#2e4368", width=1)
+        label = c.create_text(x + w // 2, y + h // 2, text=text, fill=TEXT,
+                              font=("Segoe UI", 10), anchor="center")
+        for item in (rect, label):
+            c.tag_bind(item, "<Button-1>", lambda e: command())
+            c.tag_bind(item, "<Enter>",
+                       lambda e: (c.itemconfig(rect, fill="#24406b"), c.config(cursor="hand2")))
+            c.tag_bind(item, "<Leave>",
+                       lambda e: (c.itemconfig(rect, fill="#1b2a45"), c.config(cursor="")))
+
+    # --- Вкладка: Серверы (список стран с раскрытием) ---
     def _build_servers_tab(self):
         frame = tk.Frame(self.content, bg=BG_DARK)
-        self._add_snow_layer(frame)
+        self._add_snow_layer(frame, interactive=False)
 
-        tk.Label(frame, text="🌐  Серверы и прокси", bg=BG_DARK, fg=ACCENT,
-                 font=("Segoe UI", 18, "bold")).pack(anchor=tk.W, padx=25, pady=20)
+        tk.Label(frame, text="🌐  Серверы", bg=BG_DARK, fg=ACCENT,
+                 font=("Segoe UI", 20, "bold")).pack(anchor=tk.W, padx=25, pady=(18, 4))
+        tk.Label(frame, text="Выбери страну, чтобы увидеть серверы и подключиться",
+                 bg=BG_DARK, fg=TEXT_MUTED, font=("Segoe UI", 10)).pack(anchor=tk.W, padx=25)
 
-        hint = tk.Label(frame, text="Подключение заполняет прокси по очереди: сначала по 1 человеку на каждый, потом по 2, и так до 3. Колонка «Подключён» показывает, кто где.",
-                        bg=BG_DARK, fg=TEXT_MUTED, font=("Segoe UI", 10))
-        hint.pack(anchor=tk.W, padx=25)
+        # Прокручиваемая область для списка стран
+        self.servers_list = tk.Frame(frame, bg=BG_DARK)
+        self.servers_list.pack(fill=tk.BOTH, expand=True, padx=25, pady=15)
 
-        # Таблица
-        table_frame = tk.Frame(frame, bg=CARD_BG, highlightbackground=BORDER, highlightthickness=1)
-        table_frame.pack(fill=tk.BOTH, expand=True, padx=25, pady=15)
+        self.expanded_country = None
+        self._render_server_countries()
 
-        columns = ("host", "port", "country", "users", "latency", "status")
-        self.server_tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=10)
-        for col, text, width in [("host", "IP / Host", 150), ("port", "Порт", 65),
-                                 ("country", "Страна", 100), ("users", "Подключён", 150),
-                                 ("latency", "Скорость", 90), ("status", "Статус", 110)]:
-            self.server_tree.heading(col, text=text)
-            self.server_tree.column(col, width=width, anchor=tk.CENTER)
-        self.server_tree.pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
-        self.server_tree.tag_configure("busy", foreground=ERROR)
-        self.server_tree.tag_configure("free", foreground=SUCCESS)
-
-        # Кнопки (добавление/удаление прокси убрано — прокси вшиты в приложение)
+        # Кнопка проверки скорости
         btn_frame = tk.Frame(frame, bg=BG_DARK)
-        btn_frame.pack(fill=tk.X, padx=25, pady=(0, 20))
+        btn_frame.pack(fill=tk.X, padx=25, pady=(0, 18))
         self._make_action_btn(btn_frame, "⚡ Проверить скорость", self.check_speed, SUCCESS)
-        self._make_action_btn(btn_frame, "🔌 Подключить", self.quick_connect, ACCENT2)
         return frame
+
+    def _render_server_countries(self):
+        """Рисуем список стран; по клику раскрываем серверы этой страны"""
+        for w in self.servers_list.winfo_children():
+            w.destroy()
+
+        countries = {}
+        for p in self.config.proxies:
+            countries.setdefault(p.country, []).append(p)
+
+        for country in sorted(countries):
+            proxies = countries[country]
+            expanded = (self.expanded_country == country)
+
+            # строка страны — кнопка со стрелочкой
+            row = tk.Frame(self.servers_list, bg=CARD_BG,
+                           highlightbackground=BORDER, highlightthickness=1)
+            row.pack(fill=tk.X, pady=4)
+
+            arrow = "▾" if expanded else "▸"
+            btn = tk.Button(row, text=f"{arrow}  🌐  {country}",
+                            bg=CARD_BG, fg=ACCENT, activebackground=ACCENT2,
+                            activeforeground="white", relief="flat",
+                            font=("Segoe UI", 12, "bold"), anchor="w",
+                            padx=16, pady=12, bd=0, cursor="hand2",
+                            command=lambda c=country: self._toggle_country(c))
+            btn.pack(fill=tk.X)
+
+            if expanded:
+                for p in proxies:
+                    people = self.shared.count_on(p)
+                    lat = f"{p.latency} мс" if p.latency is not None else "—"
+                    srv = tk.Frame(row, bg="#16203a")
+                    srv.pack(fill=tk.X, padx=16, pady=2)
+                    tk.Label(srv, text=f"⚡ {p.host}:{p.port}", bg="#16203a",
+                             fg=TEXT, font=("Consolas", 10), anchor="w").pack(side=tk.LEFT)
+                    tk.Label(srv, text=f"  {lat}", bg="#16203a", fg=TEXT_MUTED,
+                             font=("Segoe UI", 9)).pack(side=tk.LEFT)
+                    tk.Label(srv, text=f"  👥 {people} чел.", bg="#16203a",
+                             fg=ACCENT, font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT)
+                    con_btn = tk.Button(srv, text="Подключить",
+                                        bg=ACCENT, fg="#000",
+                                        relief="flat", font=("Segoe UI", 9, "bold"),
+                                        cursor="hand2", padx=10, pady=3, bd=0,
+                                        command=lambda pr=p: self._connect_to_proxy(pr))
+                    con_btn.pack(side=tk.RIGHT)
+
+    def _toggle_country(self, country):
+        if self.expanded_country == country:
+            self.expanded_country = None
+        else:
+            self.expanded_country = country
+        self._render_server_countries()
+
+    def _connect_to_proxy(self, proxy):
+        if self.running:
+            messagebox.showinfo("Внимание", "Сначала отключись от текущего прокси")
+            return
+        self._do_connect(proxy)
+        self._render_server_countries()
 
     # --- Вкладка: Белый список ---
     def _build_whitelist_tab(self):
         frame = tk.Frame(self.content, bg=BG_DARK)
-        self._add_snow_layer(frame)
+        self._add_snow_layer(frame, interactive=False)
 
         tk.Label(frame, text="📋  Белый список сайтов", bg=BG_DARK, fg=ACCENT,
                  font=("Segoe UI", 18, "bold")).pack(anchor=tk.W, padx=25, pady=20)
@@ -818,7 +1037,7 @@ class SnowVPNApp:
     # --- Вкладка: Настройки ---
     def _build_settings_tab(self):
         frame = tk.Frame(self.content, bg=BG_DARK)
-        self._add_snow_layer(frame)
+        self._add_snow_layer(frame, interactive=False)
 
         tk.Label(frame, text="⚙️  Настройки", bg=BG_DARK, fg=ACCENT,
                  font=("Segoe UI", 18, "bold")).pack(anchor=tk.W, padx=25, pady=20)
@@ -845,7 +1064,7 @@ class SnowVPNApp:
     # --- Вкладка: Статистика ---
     def _build_stats_tab(self):
         frame = tk.Frame(self.content, bg=BG_DARK)
-        self._add_snow_layer(frame)
+        self._add_snow_layer(frame, interactive=False)
 
         tk.Label(frame, text="📊  Статистика", bg=BG_DARK, fg=ACCENT,
                  font=("Segoe UI", 18, "bold")).pack(anchor=tk.W, padx=25, pady=20)
@@ -888,7 +1107,7 @@ class SnowVPNApp:
     # --- Вкладка: О программе ---
     def _build_about_tab(self):
         frame = tk.Frame(self.content, bg=BG_DARK)
-        self._add_snow_layer(frame)
+        self._add_snow_layer(frame, interactive=False)
 
         tk.Label(frame, text="❄  SnowVPN", bg=BG_DARK, fg=ACCENT,
                  font=("Segoe UI", 28, "bold")).pack(pady=(40, 5))
@@ -1015,36 +1234,40 @@ class SnowVPNApp:
         canvas.create_window(x + 35, y + 42, window=c)
 
     # --- Анимация ---
+    def _create_snowflakes(self, w, h):
+        self.snowflakes = []
+        if not self.snow_canvases:
+            return
+        c = self.snow_canvases[0]
+        for _ in range(16):
+            x = random.randint(0, w)
+            y = random.randint(0, h)
+            size = random.randint(8, 13)
+            speed = random.uniform(0.8, 1.8)
+            flake = c.create_text(x, y, text="❄", font=("Segoe UI", size),
+                                  fill="#cbd5e1", tags="snow")
+            self.snowflakes.append({"id": flake, "x": x, "y": y, "speed": speed})
+
     def _start_snow(self):
         self.snowflakes = []
-        for canvas in self.snow_canvases:
-            canvas_flakes = []
-            for _ in range(30):
-                x = random.randint(0, 770)
-                y = random.randint(0, 700)
-                size = random.randint(8, 14)
-                speed = random.uniform(1.0, 2.4)
-                flake = canvas.create_text(x, y, text="❄", font=("Segoe UI", size),
-                                           fill="#cbd5e1", tags="snow")
-                canvas_flakes.append({"id": flake, "x": x, "y": y, "speed": speed})
-            self.snowflakes.append(canvas_flakes)
+        self._snow_loop_started = False
         self._animate_snow()
 
     def _animate_snow(self):
         if not self.animation_running:
             return
-        for canvas_flakes in self.snowflakes:
-            for flake in canvas_flakes:
+        c = self.snow_canvases[0] if self.snow_canvases else None
+        if c and self.snowflakes:
+            h = c.winfo_height() or 570
+            w = c.winfo_width() or 770
+            for flake in self.snowflakes:
                 flake["y"] += flake["speed"]
                 flake["x"] += math.sin(time.time() + flake["y"] * 0.01) * 0.4
-                if flake["y"] > 650:
+                if flake["y"] > h:
                     flake["y"] = -15
-                    flake["x"] = random.randint(0, 770)
-        # обновляем координаты через canvas из self.snow_canvases
-        for i, canvas in enumerate(self.snow_canvases):
-            for flake in self.snowflakes[i]:
-                canvas.coords(flake["id"], flake["x"], flake["y"])
-        self.root.after(35, self._animate_snow)
+                    flake["x"] = random.randint(0, w)
+                c.coords(flake["id"], flake["x"], flake["y"])
+        self.root.after(120, self._animate_snow)
 
     def _start_pulse(self):
         self._animate_pulse()
@@ -1052,24 +1275,27 @@ class SnowVPNApp:
     def _animate_pulse(self):
         if not self.animation_running:
             return
+        if not hasattr(self, "power_glow"):
+            self.root.after(100, self._animate_pulse)
+            return
         if self.running:
             self.pulse_state = (self.pulse_state + 0.06) % (2 * math.pi)
             intensity = int(60 + 60 * abs(math.sin(self.pulse_state)))
             color = f"#{intensity:02x}ff{intensity:02x}"
-            self.power_canvas.itemconfig(self.power_glow, fill=color)
-            self.power_canvas.itemconfig(self.power_ring, outline=SUCCESS2, width=5)
-            self.power_canvas.itemconfig(self.power_icon, fill="#ffffff")
+            self.home_canvas.itemconfig(self.power_glow, fill=color)
+            self.home_canvas.itemconfig(self.power_ring, outline=SUCCESS2, width=5)
+            self.home_canvas.itemconfig(self.power_icon, fill="#ffffff")
         else:
-            self.power_canvas.itemconfig(self.power_glow, fill="#142033")
-            self.power_canvas.itemconfig(self.power_ring, outline=ACCENT, width=4)
-            self.power_canvas.itemconfig(self.power_icon, fill=TEXT)
-        self.root.after(50, self._animate_pulse)
+            self.home_canvas.itemconfig(self.power_glow, fill="#142033")
+            self.home_canvas.itemconfig(self.power_ring, outline=ACCENT, width=4)
+            self.home_canvas.itemconfig(self.power_icon, fill=TEXT)
+        self.root.after(150, self._animate_pulse)
 
     # --- Автообновление общего статуса ---
     def _start_status_refresh(self):
         def loop():
             while True:
-                time.sleep(5)
+                time.sleep(15)
                 try:
                     self.shared.load()
                     self.root.after(0, self._sync_proxies_from_panel)
@@ -1080,25 +1306,33 @@ class SnowVPNApp:
         threading.Thread(target=loop, daemon=True).start()
 
     def _sync_proxies_from_panel(self):
-        """Подхватывает прокси, добавленные через веб-панель"""
-        added = False
-        for entry in self.shared.proxies:
-            host = entry.get("host")
-            port = int(entry.get("port", 0))
-            if not host or not port:
-                continue
-            # проверяем, нет ли уже такого
-            if any(p.host == host and p.port == port for p in self.config.proxies):
-                continue
-            self.config.proxies.append(ProxyEntry(
-                host=host, port=port,
-                user=entry.get("user", ""), password=entry.get("pass", ""),
-                country=entry.get("country", ""), ptype=entry.get("type", "socks5")
-            ))
-            added = True
-            self.log(f"➕ Веб-панель: добавлен прокси {host}:{port} ({entry.get('country','')})")
-        if added:
-            self.config.save()
+        """Синхронизирует список прокси с веб-панелью (общий источник status.json)"""
+        # Если в status.json есть список — он главный
+        if self.shared.proxies:
+            remote = set()
+            for entry in self.shared.proxies:
+                host = entry.get("host")
+                port = int(entry.get("port", 0))
+                if not host or not port:
+                    continue
+                remote.add((host, port))
+                # добавляем новый, если его нет
+                if not any(p.host == host and p.port == port for p in self.config.proxies):
+                    self.config.proxies.append(ProxyEntry(
+                        host=host, port=port,
+                        user=entry.get("user", ""), password=entry.get("pass", ""),
+                        country=entry.get("country", ""), ptype=entry.get("type", "http")
+                    ))
+                    self.log(f"➕ Веб-панель: добавлен прокси {host}:{port} ({entry.get('country','')})")
+            # удаляем те, которых больше нет в панели
+            to_remove = [p for p in self.config.proxies if (p.host, p.port) not in remote]
+            for p in to_remove:
+                self.config.proxies.remove(p)
+                if self.connected_proxy and self.connected_proxy.host == p.host and self.connected_proxy.port == p.port:
+                    self.root.after(0, self.disconnect)
+                self.log(f"🗑 Веб-панель: удалён прокси {p.host}:{p.port}")
+            if to_remove or len(self.config.proxies) != len(remote):
+                self.config.save()
 
     def _check_web_commands(self):
         """Выполняет команды с веб-панели (команда кладётся в status.json)"""
@@ -1115,10 +1349,9 @@ class SnowVPNApp:
                     return  # уже подключены к нужному
                 self.disconnect()
             proxy = next((p for p in self.config.proxies
-                          if p.host == host and p.port == port and not p.busy), None)
+                          if p.host == host and p.port == port), None)
             if proxy:
                 self.config.selected_proxy = proxy
-                self.config.mark_busy(proxy, USER_ID)
                 self.config.connect_count += 1
                 self.config.save()
                 self._start_proxy_server()
@@ -1142,42 +1375,74 @@ class SnowVPNApp:
         else:
             self.quick_connect()
 
+    def _is_free(self, proxy):
+        """Свободен ли прокси (0 подключённых в общем статусе)"""
+        return self.shared.count_on(proxy) == 0
+
+    def _pick_best(self, pool):
+        """Самый быстрый прокси (без проверки занятости)"""
+        if not pool:
+            return None
+        return min(pool, key=lambda p: p.latency if p.latency is not None else 9999)
+
     def quick_connect(self):
+        """Подключение: выбранная страна, самый быстрый прокси"""
         if self.running:
             return
-        available = self.config.get_available()
-        if not available:
-            messagebox.showerror("Ошибка", "Нет свободных прокси.")
-            return
-
-        # Сначала пробуем выбранную страну, если там есть места
         country = self.country_combo.get() or None
-        pool = [p for p in available if not country or p.country == country]
+        pool = self.config.get_available(country)
         if not pool:
-            pool = available  # если в выбранной стране всё занято — берём из всех
-
-        # Равномерно: сначала прокси с МЕНЬШИМ числом подключённых.
-        # Так сначала заполняются все по 1 человеку, потом по 2, и т.д.
-        best = min(pool, key=lambda p: (self.shared.count_on(p),
-                                        p.latency if p.latency is not None else 9999))
-
-        if self.shared.count_on(best) >= MAX_PER_PROXY:
-            messagebox.showerror("Ошибка", "Все прокси уже заполнены (по 3 человека).")
+            messagebox.showerror("Ошибка", "Нет прокси в этой стране.")
             return
+        best = self._pick_best(pool)
+        if best:
+            self._do_connect(best)
 
+    def _do_connect(self, best):
         self.config.selected_proxy = best
-        self.config.mark_busy(best, USER_ID)
         self.config.last_country = best.country
         self.config.connect_count += 1
         self.config.save()
         self.shared.add(best)
         self._start_proxy_server()
+        self._set_system_proxy(True)   # включаем системный прокси Windows
         self.running = True
         self.connected_proxy = best
+        self.connect_start = time.time()
         self._refresh_all()
         self._play_connect_sound()
         self.log(f"✅ Подключено к {best.host}:{best.port} ({best.country}) "
-                 f"[людей на прокси: {self.shared.count_on(best)}]")
+                 f"[{best.latency if best.latency is not None else '?'} мс]")
+
+    def _set_system_proxy(self, enable):
+        """Включает/выключает системный HTTP/HTTPS прокси Windows через реестр"""
+        try:
+            key = winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER,
+                r"Software\Microsoft\Windows\CurrentVersion\Internet Settings",
+                0, winreg.KEY_WRITE
+            )
+            if enable:
+                winreg.SetValueEx(key, "ProxyEnable", 0, winreg.REG_DWORD, 1)
+                winreg.SetValueEx(key, "ProxyServer", 0, winreg.REG_SZ,
+                                  f"127.0.0.1:{LOCAL_PROXY_PORT}")
+                winreg.SetValueEx(key, "ProxyOverride", 0, winreg.REG_SZ,
+                                  "<local>;localhost;127.0.0.1")
+            else:
+                winreg.SetValueEx(key, "ProxyEnable", 0, winreg.REG_DWORD, 0)
+            winreg.CloseKey(key)
+            # уведомляем Windows об изменении настроек
+            try:
+                import ctypes
+                INTERNET_OPTION_SETTINGS_CHANGED = 39
+                INTERNET_OPTION_REFRESH = 37
+                ctypes.windll.wininet.InternetSetOptionW(0, INTERNET_OPTION_SETTINGS_CHANGED, 0, 0)
+                ctypes.windll.wininet.InternetSetOptionW(0, INTERNET_OPTION_REFRESH, 0, 0)
+            except Exception:
+                pass
+            self.log(f"🖥️ Системный прокси Windows: {'включён' if enable else 'выключен'}")
+        except Exception as e:
+            self.log(f"⚠️ Не удалось изменить прокси Windows: {e}")
 
     def _start_proxy_server(self):
         if self.running:
@@ -1196,11 +1461,12 @@ class SnowVPNApp:
     def disconnect(self):
         if not self.running:
             return
+        self._set_system_proxy(False)  # выключаем системный прокси Windows
         self.shared.remove()
         if self.config.selected_proxy:
-            self.config.mark_free(self.config.selected_proxy)
             self.config.selected_proxy = None
             self.config.save()
+        self.connect_start = None
         try:
             if self.server:
                 self.server.shutdown()
@@ -1279,6 +1545,31 @@ class SnowVPNApp:
         self._refresh_all()
         self.log("🗑 Прокси удалён")
 
+    def check_ip(self):
+        """Показывает текущий IP (через прокси, если включён)"""
+        if not self.running:
+            messagebox.showinfo("Проверка IP", "VPN выключен — включи его, чтобы увидеть IP прокси.")
+            return
+        self.log("🔍 Запрашиваем IP...")
+        def worker():
+            try:
+                import urllib.request
+                req = urllib.request.Request("https://api.ipify.org?format=json",
+                    headers={"User-Agent": "SnowVPN"})
+                with urllib.request.urlopen(req, timeout=8) as r:
+                    data = json.loads(r.read().decode("utf-8"))
+                    ip = data.get("ip", "?")
+                self.root.after(0, lambda: (
+                    messagebox.showinfo("Ваш IP сейчас", f"IP: {ip}\nСтрана: {self.connected_proxy.country}\nПрокси: {self.connected_proxy.host}:{self.connected_proxy.port}"),
+                    self.log(f"🌐 Текущий IP: {ip}")
+                ))
+            except Exception as e:
+                self.root.after(0, lambda: (
+                    messagebox.showerror("Ошибка", f"Не удалось получить IP: {e}\n\nВозможно прокси не работает."),
+                    self.log(f"❌ Ошибка получения IP: {e}")
+                ))
+        threading.Thread(target=worker, daemon=True).start()
+
     def check_speed(self):
         if not self.config.proxies:
             messagebox.showinfo("Информация", "Нет прокси для проверки")
@@ -1298,6 +1589,19 @@ class SnowVPNApp:
         self.log(f"📋 Белый список: {', '.join(self.config.whitelist)}")
 
     # --- Переключатели ---
+    def on_country_selected(self, event=None):
+        """Смена страны в выпадающем списке"""
+        country = self.country_combo.get()
+        self.config.last_country = country
+        self.config.save()
+        # обновляем статус на главной
+        total = len(self.config.get_available(country))
+        self.home_canvas.itemconfig(
+            self.home_status,
+            text=f"Страна: {country} · серверов: {total}",
+            fill=ACCENT
+        )
+
     def toggle_auto(self):
         self.config.auto_connect = self.auto_var2.get()
         self.config.save()
@@ -1341,30 +1645,54 @@ class SnowVPNApp:
         self.log_text.configure(state=tk.DISABLED)
 
     # --- Обновление данных ---
-    def _refresh_all(self):
-        # Таблица серверов
-        for item in self.server_tree.get_children():
-            self.server_tree.delete(item)
-        for p in self.config.proxies:
-            status = "Занят" if p.busy else "Свободен"
-            tag = "busy" if p.busy else "free"
-            lat = f"{p.latency} мс" if p.latency is not None else "—"
-            users = self.shared.users_on(p)
-            users_text = ", ".join(users) if users else "—"
-            self.server_tree.insert("", tk.END,
-                                    values=(p.host, p.port, p.country, users_text, lat, status),
-                                    tags=(tag,))
+    def _tick_uptime(self):
+        """Обновляет время работы прокси каждую секунду"""
+        if self.running and self.connect_start and hasattr(self, "home_uptime_val"):
+            elapsed = int(time.time() - self.connect_start)
+            hh = elapsed // 3600
+            mm = (elapsed % 3600) // 60
+            ss = elapsed % 60
+            self.home_canvas.itemconfig(
+                self.home_uptime_val,
+                text=f"{hh:02d}:{mm:02d}:{ss:02d}",
+                fill=SUCCESS
+            )
+        self.root.after(1000, self._tick_uptime)
 
-        # Статус на главной
+    def _refresh_all(self):
+        # Список стран на вкладке «Серверы»
+        if hasattr(self, "servers_list") and self.servers_list.winfo_exists():
+            self._render_server_countries()
+
+        # Статус на главной + переключатель OFF/ON
         if self.running and self.connected_proxy:
             p = self.connected_proxy
-            self.home_status.config(text=f"Подключено: {p.host} ({p.country})", fg=SUCCESS)
-            self.my_ip_card.value_label.config(text="Защищён", fg=SUCCESS)
-            self.server_card.value_label.config(text=p.country, fg=SUCCESS)
+            self.home_canvas.itemconfig(self.home_status,
+                                        text=f"Подключено: {p.host} ({p.country})", fill=SUCCESS)
+            self.home_canvas.itemconfig(self.home_ip_val, text="Защищён", fill=SUCCESS)
+            self.home_canvas.itemconfig(self.home_server_val, text=p.country, fill=SUCCESS)
+            # переключатель в ON
+            self.home_canvas.itemconfig(self.switch_knob, fill=SUCCESS)
+            self.home_canvas.itemconfig(self.switch_label, text="ON", fill="#eafff2")
+            self.home_canvas.coords(
+                self.switch_knob,
+                self.switch_on_x - 34, self.switch_on_y - 34,
+                self.switch_on_x + 34, self.switch_on_y + 34
+            )
         else:
-            self.home_status.config(text="Отключено", fg=TEXT_MUTED)
-            self.my_ip_card.value_label.config(text="—", fg=ACCENT)
-            self.server_card.value_label.config(text="Не выбрано", fg=SUCCESS)
+            self.home_canvas.itemconfig(self.home_status, text="Отключено", fill=TEXT_MUTED)
+            self.home_canvas.itemconfig(self.home_ip_val, text="—", fill=ACCENT)
+            self.home_canvas.itemconfig(self.home_server_val, text="Не выбрано", fill=SUCCESS)
+            # переключатель в OFF
+            self.home_canvas.itemconfig(self.switch_knob, fill="#8899b0")
+            self.home_canvas.itemconfig(self.switch_label, text="OFF", fill="#cbd5e1")
+            if hasattr(self, "switch_off_x"):
+                self.home_canvas.coords(
+                    self.switch_knob,
+                    self.switch_off_x - 34, self.switch_off_y - 34,
+                    self.switch_off_x + 34, self.switch_off_y + 34
+                )
+            self.home_canvas.itemconfig(self.home_uptime_val, text="00:00:00", fill=WARNING)
 
         # Статистика
         self.stat_labels["proxy_count"].config(text=str(len(self.config.proxies)))
@@ -1379,7 +1707,16 @@ class SnowVPNApp:
 
 
 if __name__ == "__main__":
+    # Не разрешаем запускать больше одной копии (один экземпляр)
+    import ctypes
+    kernel32 = ctypes.windll.kernel32
+    MUTEX_NAME = "SnowVPN_Single_Instance_Mutex"
+    mutex = kernel32.CreateMutexW(None, True, MUTEX_NAME)
+    ERROR_ALREADY_EXISTS = 183
+    if kernel32.GetLastError() == ERROR_ALREADY_EXISTS:
+        # уже запущен — просто выходим
+        sys.exit(0)
+
     root = tk.Tk()
     app = SnowVPNApp(root)
-    root.protocol("WM_DELETE_WINDOW", lambda: (app.disconnect(), root.destroy()))
     root.mainloop()
