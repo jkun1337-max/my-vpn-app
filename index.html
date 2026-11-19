@@ -317,9 +317,15 @@ h1 {
 
 <script>
 // "База данных" пользователей (только для демонстрации!)
+// 6 аккаунтов с одинаковым сложным паролем
+const COMMON_PASSWORD = 'Snow#VPN-2026!x7';
 const USERS = [
-  { email: 'paha@gmail.com', password: '0101', name: 'Паша' },
-  { email: 'step@gmail.com', password: '0101', name: 'Степан' }
+  { email: 'snow1@gmail.com', password: COMMON_PASSWORD, name: 'Пользователь 1' },
+  { email: 'snow2@gmail.com', password: COMMON_PASSWORD, name: 'Пользователь 2' },
+  { email: 'snow3@gmail.com', password: COMMON_PASSWORD, name: 'Пользователь 3' },
+  { email: 'snow4@gmail.com', password: COMMON_PASSWORD, name: 'Пользователь 4' },
+  { email: 'snow5@gmail.com', password: COMMON_PASSWORD, name: 'Пользователь 5' },
+  { email: 'snow6@gmail.com', password: COMMON_PASSWORD, name: 'Пользователь 6' }
 ];
 
 const loginScreen = document.getElementById('loginScreen');
