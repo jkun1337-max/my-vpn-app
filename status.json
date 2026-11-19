@@ -1,6 +1,19 @@
 {
-  "connections": [],
-  "commands": {},
+  "connections": [
+    {
+      "user": "Паша",
+      "proxy": "168.81.205.165:9899",
+      "country": "Бразилия ",
+      "since": "23:57:43"
+    }
+  ],
+  "commands": {
+    "Паша": {
+      "action": "connect",
+      "host": "168.81.205.165",
+      "port": 9899
+    }
+  },
   "proxies": [
     {
       "host": "138.219.122.200",
