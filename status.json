@@ -117,6 +117,12 @@
       "email": "1",
       "password": "1",
       "name": "1"
+    },
+    {
+      "uid": "step0101",
+      "email": "step@gmail.com",
+      "password": "0101",
+      "name": "step"
     }
   ]
 }
