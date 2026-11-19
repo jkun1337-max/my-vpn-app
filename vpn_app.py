@@ -73,6 +73,16 @@ STATUS_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{STATUS_F
 DISPLAY_NAME = socket.gethostname()  # имя этого компа — будет видно в списке
 MAX_PER_PROXY = 3   # максимум человек на один прокси
 
+# База пользователей для входа в приложение (та же, что на сайте)
+USERS_DB = [
+    {"email": "frost.wolf@protonmail.com", "password": "Fw9#kL2!vN8@qR", "name": "Пользователь 1"},
+    {"email": "north.star@outlook.com",    "password": "Ns3%pT7&wM4#jK", "name": "Пользователь 2"},
+    {"email": "polar.bear@gmail.com",      "password": "Pb6@mQ1!zX9%rD", "name": "Пользователь 3"},
+    {"email": "snow.owl@yandex.ru",        "password": "So4#vH8&nP2!kL", "name": "Пользователь 4"},
+    {"email": "ice.fox@mail.ru",           "password": "If7%rB3@wT6#mQ", "name": "Пользователь 5"},
+    {"email": "winter.deer@icloud.com",    "password": "Wd2!yN9@kL5&pV", "name": "Пользователь 6"},
+]
+
 # Цвета (новогодняя синяя тема)
 BG_DARK = "#0b1220"
 SIDEBAR_BG = "#0f172a"
@@ -1706,6 +1716,78 @@ class SnowVPNApp:
             fg=SUCCESS if self.running else ERROR)
 
 
+class LoginWindow:
+    """Окно входа в приложение"""
+    def __init__(self, root, on_success):
+        self.root = root
+        self.on_success = on_success
+        self.root.title("SnowVPN — Вход")
+        self.root.geometry("420x420")
+        self.root.resizable(False, False)
+        self.root.configure(bg=BG_DARK)
+
+        # центрируем
+        self.root.update_idletasks()
+        x = (self.root.winfo_screenwidth() // 2) - 210
+        y = (self.root.winfo_screenheight() // 2) - 210
+        self.root.geometry(f"+{x}+{y}")
+
+        header = tk.Frame(self.root, bg=SIDEBAR_BG, height=70)
+        header.pack(fill=tk.X)
+        header.pack_propagate(False)
+        tk.Label(header, text="❄ SnowVPN", bg=SIDEBAR_BG, fg=ACCENT,
+                 font=("Segoe UI", 18, "bold")).pack(pady=18)
+
+        card = tk.Frame(self.root, bg=CARD_BG, highlightbackground=BORDER, highlightthickness=1)
+        card.pack(fill=tk.BOTH, expand=True, padx=25, pady=20)
+
+        tk.Label(card, text="Вход", bg=CARD_BG, fg=TEXT,
+                 font=("Segoe UI", 16, "bold")).pack(pady=(20, 5))
+        tk.Label(card, text="Введите email и пароль", bg=CARD_BG, fg=TEXT_MUTED,
+                 font=("Segoe UI", 10)).pack(pady=(0, 20))
+
+        tk.Label(card, text="Email", bg=CARD_BG, fg=TEXT_MUTED,
+                 font=("Segoe UI", 10)).pack(anchor=tk.W, padx=25)
+        self.email = tk.Entry(card, bg=BG_DARK, fg=TEXT, insertbackground=ACCENT,
+                              relief="flat", font=("Segoe UI", 11))
+        self.email.pack(fill=tk.X, padx=25, pady=(3, 12))
+
+        tk.Label(card, text="Пароль", bg=CARD_BG, fg=TEXT_MUTED,
+                 font=("Segoe UI", 10)).pack(anchor=tk.W, padx=25)
+        self.password = tk.Entry(card, bg=BG_DARK, fg=TEXT, insertbackground=ACCENT,
+                                 relief="flat", font=("Segoe UI", 11), show="•")
+        self.password.pack(fill=tk.X, padx=25, pady=(3, 12))
+        self.password.bind("<Return>", lambda e: self.try_login())
+
+        btn = tk.Button(card, text="Войти", command=self.try_login,
+                        bg=ACCENT, fg="#000", activebackground=ACCENT2,
+                        activeforeground="white", relief="flat",
+                        font=("Segoe UI", 11, "bold"), cursor="hand2",
+                        padx=20, pady=8, bd=0)
+        btn.pack(pady=10)
+
+        self.alert = tk.Label(card, text="", bg=CARD_BG, fg=ERROR,
+                              font=("Segoe UI", 10))
+        self.alert.pack()
+
+    def try_login(self):
+        email = self.email.get().strip().lower()
+        password = self.password.get()
+        user = next((u for u in USERS_DB
+                     if u["email"].lower() == email and u["password"] == password), None)
+        if user:
+            self.root.destroy()
+            self.on_success(user)
+        else:
+            self.alert.config(text="Неверный email или пароль")
+
+
+def run_main_app(user):
+    root = tk.Tk()
+    app = SnowVPNApp(root)
+    root.mainloop()
+
+
 if __name__ == "__main__":
     # Не разрешаем запускать больше одной копии (один экземпляр)
     import ctypes
@@ -1717,6 +1799,6 @@ if __name__ == "__main__":
         # уже запущен — просто выходим
         sys.exit(0)
 
-    root = tk.Tk()
-    app = SnowVPNApp(root)
-    root.mainloop()
+    login_root = tk.Tk()
+    LoginWindow(login_root, run_main_app)
+    login_root.mainloop()
