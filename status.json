@@ -1,12 +1,5 @@
 {
-  "connections": [
-    {
-      "user": "имя",
-      "proxy": "168.196.237.129:9946",
-      "country": "Канада",
-      "since": "22:55:01"
-    }
-  ],
+  "connections": [],
   "commands": {
     "Паша": {
       "action": "disconnect"
