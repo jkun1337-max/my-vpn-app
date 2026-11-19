@@ -168,12 +168,12 @@ td { padding: 14px 16px; border-top: 1px solid var(--border); font-size: 13px; }
     <input type="text" id="pxAddr" placeholder="IP:порт  (например 1.2.3.4:1080)" style="max-width:260px">
     <input type="text" id="pxUser" placeholder="Логин" style="max-width:120px">
     <input type="text" id="pxPass" placeholder="Пароль" style="max-width:120px">
-    <select id="pxCountry" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text)">
-      <option value="Канада">Канада</option>
-      <option value="Украина">Украина</option>
-      <option value="Россия">Россия</option>
-      <option value="Другое">Другое</option>
-    </select>
+    <input type="text" id="pxCountry" placeholder="Страна (напиши сам)" list="countryList" style="max-width:150px">
+    <datalist id="countryList">
+      <option value="Канада"></option>
+      <option value="Украина"></option>
+      <option value="Россия"></option>
+    </datalist>
     <button class="btn" onclick="addProxyFromForm()" style="background:#22c55e;color:#000">Добавить</button>
     <span style="color:var(--muted);font-size:12px;width:100%;margin-top:6px">
       Вставь адрес с портом через двоеточие. Прокси появится у всех, кто открыл панель, и в приложении.
