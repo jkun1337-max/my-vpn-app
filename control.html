@@ -133,9 +133,54 @@ td { padding: 14px 16px; border-top: 1px solid var(--border); font-size: 13px; }
   vertical-align: middle;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* Экран блокировки паролем */
+#lockScreen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: #050912;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.lock-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 40px;
+  width: 360px;
+  text-align: center;
+  box-shadow: 0 30px 80px rgba(0,0,0,0.6);
+}
+.lock-card h2 { color: var(--accent); margin-bottom: 6px; font-size: 22px; }
+.lock-card p { color: var(--muted); font-size: 12px; margin-bottom: 24px; }
+.lock-card input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 13px;
+  color: var(--text);
+  font-size: 14px;
+  outline: none;
+}
+.lock-card input:focus { border-color: var(--accent); }
+.lock-err { color: var(--error); font-size: 12px; margin-top: 12px; min-height: 16px; }
 </style>
 </head>
 <body>
+
+<!-- Экран блокировки паролем -->
+<div id="lockScreen">
+  <div class="lock-card">
+    <h2>🔐 SnowVPN</h2>
+    <p>Панель управления защищена паролем</p>
+    <input type="password" id="lockPass" placeholder="Введите пароль" onkeydown="if(event.key==='Enter')checkLock()">
+    <div class="lock-err" id="lockErr"></div>
+    <button class="btn" onclick="checkLock()" style="margin-top:8px">Войти</button>
+  </div>
+</div>
 
 <div class="header">
   <span style="font-size:22px">❄️</span>
@@ -247,6 +292,23 @@ function deleteAccount() {
     render();
     setMsg(`🗑 Аккаунт ${uid} удалён`, 'ok');
   });
+}
+
+// --- Блокировка паролем ---
+const PANEL_PASSWORD = "Berlin-1488";
+function checkLock() {
+  const v = document.getElementById('lockPass').value;
+  if (v === PANEL_PASSWORD) {
+    sessionStorage.setItem('panel_unlocked', '1');
+    document.getElementById('lockScreen').style.display = 'none';
+  } else {
+    const e = document.getElementById('lockErr');
+    e.textContent = 'Неверный пароль';
+    document.getElementById('lockPass').value = '';
+  }
+}
+if (sessionStorage.getItem('panel_unlocked') === '1') {
+  document.getElementById('lockScreen').style.display = 'none';
 }
 
 function getToken() {
