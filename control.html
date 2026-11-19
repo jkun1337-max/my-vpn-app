@@ -158,6 +158,28 @@ td { padding: 14px 16px; border-top: 1px solid var(--border); font-size: 13px; }
     <span style="color:var(--muted);font-size:12px">Введи токен один раз — он запомнится в этом браузере</span>
   </div>
 
+  <!-- Форма добавления прокси -->
+  <div class="name-bar" style="border-color:#22c55e; flex-wrap:wrap">
+    <label>➕ Добавить прокси:</label>
+    <select id="pxType" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text)">
+      <option value="socks5">SOCKS5</option>
+      <option value="http">HTTP</option>
+    </select>
+    <input type="text" id="pxAddr" placeholder="IP:порт  (например 1.2.3.4:1080)" style="max-width:260px">
+    <input type="text" id="pxUser" placeholder="Логин" style="max-width:120px">
+    <input type="text" id="pxPass" placeholder="Пароль" style="max-width:120px">
+    <select id="pxCountry" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text)">
+      <option value="Канада">Канада</option>
+      <option value="Украина">Украина</option>
+      <option value="Россия">Россия</option>
+      <option value="Другое">Другое</option>
+    </select>
+    <button class="btn" onclick="addProxyFromForm()" style="background:#22c55e;color:#000">Добавить</button>
+    <span style="color:var(--muted);font-size:12px;width:100%;margin-top:6px">
+      Вставь адрес с портом через двоеточие. Прокси появится у всех, кто открыл панель, и в приложении.
+    </span>
+  </div>
+
   <div class="stats">
     <div class="stat"><div class="label">Всего прокси</div><div class="value" id="statTotal">—</div></div>
     <div class="stat"><div class="label">Канада</div><div class="value" id="statCa">—</div></div>
@@ -192,8 +214,8 @@ window.addEventListener('DOMContentLoaded', () => {
   if (saved) document.getElementById('ghToken').value = saved;
 });
 
-// Список прокси (такой же, как в приложении)
-const PROXIES = [
+// Базовый список прокси. При загрузке подменяется списком из status.json
+let PROXIES = [
   {host:"138.219.122.200", port:9148, country:"Канада", type:"socks5", user:"7Kufgp", pass:"KJwuh8"},
   {host:"200.71.127.25",   port:9979, country:"Канада", type:"socks5", user:"7Kufgp", pass:"KJwuh8"},
   {host:"168.196.237.162", port:9302, country:"Канада", type:"socks5", user:"7Kufgp", pass:"KJwuh8"},
@@ -232,6 +254,10 @@ async function loadAll() {
     }
     if (!currentData.connections) currentData.connections = [];
     if (!currentData.commands) currentData.commands = {};
+    // если в status.json есть свой список прокси — используем его
+    if (currentData.proxies && currentData.proxies.length) {
+      PROXIES = currentData.proxies;
+    }
     render();
     setMsg("✅ Данные загружены", "ok");
   } catch (e) {
@@ -350,6 +376,41 @@ function disconnectFromProxy(key) {
   currentData.connections = currentData.connections.filter(c => c.user !== myName);
   currentData.commands[myName] = { action: "disconnect" };
   saveAll().then(render);
+}
+
+function addProxyFromForm() {
+  const addr = document.getElementById("pxAddr").value.trim();
+  const type = document.getElementById("pxType").value;
+  const user = document.getElementById("pxUser").value.trim();
+  const pass = document.getElementById("pxPass").value.trim();
+  const country = document.getElementById("pxCountry").value;
+
+  const parts = addr.split(":");
+  if (parts.length !== 2 || !parts[0] || !parts[1] || isNaN(Number(parts[1]))) {
+    setMsg("❌ Формат адреса: IP:порт  (например 1.2.3.4:1080)", "error");
+    return;
+  }
+  const host = parts[0];
+  const port = Number(parts[1]);
+
+  // не добавляем дубликат
+  if (PROXIES.some(p => p.host === host && p.port === port)) {
+    setMsg("⚠️ Такой прокси уже есть в списке", "error");
+    return;
+  }
+
+  PROXIES.push({ host, port, country, type, user, pass });
+  currentData.proxies = PROXIES;
+
+  // очищаем поля
+  document.getElementById("pxAddr").value = "";
+  document.getElementById("pxUser").value = "";
+  document.getElementById("pxPass").value = "";
+
+  saveAll().then(() => {
+    render();
+    setMsg(`✅ Прокси ${host}:${port} добавлен (появится у всех через 15 сек)`, "ok");
+  });
 }
 
 function setMsg(text, cls) {
