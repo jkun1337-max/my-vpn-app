@@ -18,7 +18,33 @@ import winsound
 import urllib.request
 import urllib.error
 import base64
+import ctypes
 from datetime import datetime
+from PIL import Image, ImageTk
+
+# Загружаем фон один раз (чтобы не удалялся сборщиком мусора)
+BG_IMAGE = None
+def _find_bg():
+    import sys as _sys
+    candidates = ["background.png"]
+    # для PyInstaller --onefile файл лежит во временной папке _MEIPASS
+    if getattr(_sys, "_MEIPASS", None):
+        candidates.append(os.path.join(_sys._MEIPASS, "background.png"))
+    # рядом с исполняемым файлом
+    candidates.append(os.path.join(os.path.dirname(os.path.abspath(_sys.argv[0])), "background.png"))
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    return None
+
+try:
+    _bg_path = _find_bg()
+    if _bg_path:
+        BG_IMAGE = ImageTk.PhotoImage(Image.open(_bg_path).convert("RGB"))
+    else:
+        print("Фон не найден")
+except Exception as e:
+    print("Фон не загружен:", e)
 
 # -----------------------------
 # Константы
@@ -507,8 +533,9 @@ class SnowVPNApp:
         self.root = root
         self.root.title(f"{APP_TITLE} v{APP_VERSION}")
         self.root.geometry("1000x700")
-        self.root.minsize(900, 650)
+        self.root.resizable(False, False)  # запрет разворачивания на весь экран
         self.root.configure(bg=BG_DARK)
+        self._setup_window_style()
 
         self.config = ConfigManager()
         self.config.load()
@@ -536,6 +563,30 @@ class SnowVPNApp:
 
         if self.config.auto_connect and self.config.get_available():
             self.root.after(1500, self.quick_connect)
+
+    def _setup_window_style(self):
+        """Скруглённые углы окна и запрет максимизации (Windows 10/11)"""
+        try:
+            self.root.update_idletasks()
+            hwnd = ctypes.windll.user32.GetParent(self.root.winfo_id())
+            if not hwnd:
+                hwnd = self.root.winfo_id()
+            # убираем кнопку максимизации
+            GWL_STYLE = -16
+            WS_MAXIMIZEBOX = 0x00010000
+            style = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_STYLE)
+            ctypes.windll.user32.SetWindowLongW(hwnd, GWL_STYLE, style & ~WS_MAXIMIZEBOX)
+            # скруглённые углы (Windows 11)
+            DWMWA_WINDOW_CORNER_PREFERENCE = 33
+            DWMWCP_ROUND = 2
+            ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                ctypes.c_void_p(hwnd),
+                ctypes.c_int(DWMWA_WINDOW_CORNER_PREFERENCE),
+                ctypes.byref(ctypes.c_int(DWMWCP_ROUND)),
+                ctypes.sizeof(ctypes.c_int)
+            )
+        except Exception as e:
+            print("Стиль окна не применён:", e)
 
     # --- Построение интерфейса ---
     def _build_ui(self):
@@ -620,6 +671,8 @@ class SnowVPNApp:
     def _add_snow_layer(self, frame):
         canvas = tk.Canvas(frame, bg=BG_DARK, highlightthickness=0)
         canvas.place(x=0, y=0, relwidth=1, relheight=1)
+        if BG_IMAGE:
+            canvas.create_image(0, 0, image=BG_IMAGE, anchor="nw", tags="bg")
         self.snow_canvases.append(canvas)
         return canvas
 
