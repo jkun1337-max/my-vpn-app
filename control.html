@@ -327,15 +327,16 @@ function render() {
       if (iAmHere) {
         btn = `<button class="btn disconnect" onclick="disconnectFromProxy('${key}')">Отключиться</button>`;
       } else {
-        btn = `<button class="btn" ${full ? "disabled" : ""} onclick="connectToProxy('${key}')">Подключиться</button>`;
+        btn = `<button class="btn" onclick="connectToProxy('${key}')">Подключиться</button>`;
       }
+      const delBtn = `<button class="btn" style="background:#ef4444;color:#fff;margin-left:6px" onclick="deleteProxy('${key}')">🗑</button>`;
 
       html += `<tr>
         <td>${p.host}</td>
         <td>${p.port}</td>
         <td>${p.type}</td>
-        <td class="users ${users.length ? '' : 'empty'}">${usersText}</td>
-        <td>${btn}</td>
+        <td class="users ${users.length ? '' : 'empty'}">${usersText} (${users.length})</td>
+        <td>${btn}${delBtn}</td>
       </tr>`;
     });
 
@@ -410,6 +411,19 @@ function addProxyFromForm() {
   saveAll().then(() => {
     render();
     setMsg(`✅ Прокси ${host}:${port} добавлен (появится у всех через 15 сек)`, "ok");
+  });
+}
+
+function deleteProxy(key) {
+  if (!confirm("Удалить прокси " + key + "?")) return;
+  const [host, port] = key.split(":");
+  PROXIES = PROXIES.filter(p => !(p.host === host && String(p.port) === port));
+  currentData.proxies = PROXIES;
+  // также убираем подключения к этому прокси
+  currentData.connections = currentData.connections.filter(c => c.proxy !== key);
+  saveAll().then(() => {
+    render();
+    setMsg(`🗑 Прокси ${key} удалён (исчезнет у всех через 15 сек)`, "ok");
   });
 }
 
