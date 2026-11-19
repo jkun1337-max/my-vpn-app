@@ -1,10 +1,6 @@
 {
   "connections": [],
-  "commands": {
-    "Паша": {
-      "action": "disconnect"
-    }
-  },
+  "commands": {},
   "proxies": [
     {
       "host": "138.219.122.200",
