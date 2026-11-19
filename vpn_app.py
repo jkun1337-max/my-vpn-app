@@ -242,6 +242,7 @@ class SharedStatus:
     def __init__(self):
         self.connections = []  # [{"user", "proxy", "country", "since"}]
         self.commands = {}     # {"имя": {"action", "host", "port"}}
+        self.proxies = []      # список прокси из веб-панели
 
     def load(self):
         if not GITHUB_TOKEN:
@@ -252,6 +253,7 @@ class SharedStatus:
                 data = json.loads(r.read().decode("utf-8"))
                 self.connections = data.get("connections", [])
                 self.commands = data.get("commands", {})
+                self.proxies = data.get("proxies", [])
         except Exception:
             pass
 
@@ -262,7 +264,8 @@ class SharedStatus:
             # сперва подтягиваем свежую версию, чтобы не затирать чужие изменения
             self.load()
             payload = json.dumps({"connections": self.connections,
-                                  "commands": self.commands},
+                                  "commands": self.commands,
+                                  "proxies": self.proxies},
                                  ensure_ascii=False, indent=2).encode("utf-8")
             body = {
                 "message": "SnowVPN: update",
@@ -1069,11 +1072,33 @@ class SnowVPNApp:
                 time.sleep(5)
                 try:
                     self.shared.load()
+                    self.root.after(0, self._sync_proxies_from_panel)
                     self.root.after(0, self._refresh_all)
                     self.root.after(0, self._check_web_commands)
                 except Exception:
                     pass
         threading.Thread(target=loop, daemon=True).start()
+
+    def _sync_proxies_from_panel(self):
+        """Подхватывает прокси, добавленные через веб-панель"""
+        added = False
+        for entry in self.shared.proxies:
+            host = entry.get("host")
+            port = int(entry.get("port", 0))
+            if not host or not port:
+                continue
+            # проверяем, нет ли уже такого
+            if any(p.host == host and p.port == port for p in self.config.proxies):
+                continue
+            self.config.proxies.append(ProxyEntry(
+                host=host, port=port,
+                user=entry.get("user", ""), password=entry.get("pass", ""),
+                country=entry.get("country", ""), ptype=entry.get("type", "socks5")
+            ))
+            added = True
+            self.log(f"➕ Веб-панель: добавлен прокси {host}:{port} ({entry.get('country','')})")
+        if added:
+            self.config.save()
 
     def _check_web_commands(self):
         """Выполняет команды с веб-панели (команда кладётся в status.json)"""
