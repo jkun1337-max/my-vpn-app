@@ -341,17 +341,17 @@ class SharedStatus:
         self.connections = [c for c in self.connections if c.get("user") != DISPLAY_NAME]
         return self.save()
 
-    def commands_for_me(self, uid):
-        """Вернуть команду, адресованную ТОЛЬКО этому аккаунту (по UID)"""
+    def commands_for_me(self, uid=None):
+        """Вернуть ОБЩУЮ команду (ключ 'all') — выполняют все приложения"""
         if not self.commands:
             return None
-        return self.commands.get(uid)
+        return self.commands.get("all")
 
-    def clear_command(self, uid):
-        """Удалить только свою команду, не трогая чужие"""
+    def clear_command(self, uid=None):
+        """Очистить общую команду"""
         self.load()
-        if uid in self.commands:
-            del self.commands[uid]
+        if "all" in self.commands:
+            del self.commands["all"]
         return self.save()
 
     def count_on(self, proxy):
@@ -1367,11 +1367,8 @@ class SnowVPNApp:
                     self.log(f"👤 Веб-панель: добавлен аккаунт {uid}")
 
     def _check_web_commands(self):
-        """Выполняет ТОЛЬКО команды, адресованные этому аккаунту (по UID)"""
-        uid = getattr(self, "my_uid", "")
-        if not uid:
-            return
-        cmd = self.shared.commands_for_me(uid)
+        """Выполняет ОБЩУЮ команду из панели (приходит всем приложениям)"""
+        cmd = self.shared.commands_for_me()
         if not cmd:
             return
         action = cmd.get("action")
@@ -1400,8 +1397,8 @@ class SnowVPNApp:
             if self.running:
                 self.disconnect()
                 self.log("🌐 Веб-панель: отключено")
-        # отмечаем ТОЛЬКО свою команду выполненной
-        self.shared.clear_command(uid)
+        # помечаем общую команду выполненной
+        self.shared.clear_command()
 
     # --- Логика подключения ---
     def toggle_connection(self):
