@@ -1,12 +1,5 @@
 {
-  "connections": [
-    {
-      "user": "имя",
-      "proxy": "200.71.127.25:9979",
-      "country": "Канада",
-      "since": "23:11:44"
-    }
-  ],
+  "connections": [],
   "commands": {},
   "proxies": []
 }
