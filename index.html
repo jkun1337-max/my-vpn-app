@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Мой VPN / Прокси — Вход</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg-dark: #0a0a0f;
+  --card-bg: #161b22;
+  --accent: #ff4757;
+  --accent-hover: #ff6b81;
+  --success: #2ed573;
+  --text: #ffffff;
+  --muted: #a4b0be;
+  --border: #2f3542;
+}
+
+/* Новогодний фон и снег */
+body {
+  font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg-dark);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow-x: hidden;
+  position: relative;
+}
+
+.snowflake {
+  position: absolute;
+  top: -10px;
+  color: #fff;
+  font-size: 14px;
+  user-select: none;
+  z-index: 1;
+  pointer-events: none;
+  animation: fall linear infinite;
+}
+
+@keyframes fall {
+  to { transform: translateY(100vh) translateX(20px); }
+}
+
+/* Елка в углу */
+.tree {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  font-size: 32px;
+  opacity: 0.6;
+  z-index: 0;
+  filter: drop-shadow(0 0 10px #0f0);
+  animation: sway 4s ease-in-out infinite;
+}
+
+@keyframes sway {
+  0%, 100% { transform: rotate(-5deg); }
+  50% { transform: rotate(5deg); }
+}
+
+/* Контейнер */
+.app {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: 420px;
+  padding: 20px;
+}
+
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 40px 30px;
+  box-shadow: 0 25px 80px rgba(0,0,0,0.6);
+  text-align: center;
+}
+
+.logo {
+  font-size: 32px;
+  margin-bottom: 8px;
+  color: var(--accent);
+  text-shadow: 0 0 20px rgba(255, 71, 87, 0.4);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+h1 {
+  color: var(--text);
+  margin-bottom: 6px;
+  font-size: 22px;
+}
+
+.subtitle {
+  color: var(--muted);
+  font-size: 14px;
+  margin-bottom: 32px;
+}
+
+/* Форма */
+.form-group {
+  margin-bottom: 18px;
+  text-align: left;
+}
+
+.form-group label {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+  margin-bottom: 7px;
+  font-weight: 600;
+}
+
+.form-group input {
+  width: 100%;
+  background: #0d1117;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  color: var(--text);
+  font-size: 15px;
+  outline: none;
+  transition: border 0.2s;
+}
+
+.form-group input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(255, 71, 87, 0.15);
+}
+
+/* Кнопки */
+.btn {
+  width: 100%;
+  padding: 14px;
+  border: none;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-top: 4px;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: var(--accent-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(255, 71, 87, 0.3);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.btn-download {
+  background: var(--success);
+  color: #fff;
+  margin-top: 10px;
+  display: none; /* по умолчанию скрыта */
+}
+
+.btn-download:hover {
+  background: #2cc36b;
+}
+
+.btn-download:disabled {
+  background: #444;
+  color: #888;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.btn-logout {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  margin-top: 12px;
+}
+
+.btn-logout:hover {
+  color: var(--text);
+  border-color: var(--text);
+}
+
+/* Сообщения */
+.alert {
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  display: none;
+  border: 1px solid transparent;
+}
+
+.alert-error {
+  background: rgba(255, 71, 87, 0.15);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.alert-success {
+  background: rgba(46, 213, 115, 0.15);
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.hint {
+  margin-top: 20px;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* Приветствие */
+.welcome {
+  margin-bottom: 24px;
+}
+
+.welcome .name {
+  color: var(--success);
+  font-weight: 700;
+}
+
+/* Footer */
+.footer {
+  margin-top: 30px;
+  font-size: 11px;
+  color: #666;
+  text-align: center;
+}
+
+.santa {
+  font-size: 24px;
+  margin-left: 6px;
+  animation: bounce 2s ease-in-out infinite;
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+</style>
+</head>
+<body>
+
+<div class="tree">🎄</div>
+
+<div class="app">
+  <div class="card" id="card">
+    <!-- Welcome / Login экран -->
+    <div id="loginScreen">
+      <div class="logo">🛡️</div>
+      <h1>Мой VPN / Прокси</h1>
+      <div class="subtitle">Войдите, чтобы скачать приложение</div>
+
+      <form id="loginForm">
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" id="email" placeholder="Введите email" required autocomplete="email">
+        </div>
+        <div class="form-group">
+          <label>Пароль</label>
+          <input type="password" id="password" placeholder="••••••" required autocomplete="current-password">
+        </div>
+        <button type="submit" class="btn btn-primary" id="loginBtn">Войти</button>
+        <div id="loginAlert" class="alert alert-error"></div>
+      </form>
+
+      <div class="hint">
+        Вход только для зарегистрированных пользователей<br>
+        Если у вас нет доступа — обратитесь к администратору
+      </div>
+    </div>
+
+    <!-- Экран после входа -->
+    <div id="appScreen" style="display: none;">
+      <div class="welcome">
+        <span>Добро пожаловать, <span class="name" id="userName"></span>!</span> <span class="santa">🎅</span>
+      </div>
+      <div class="logo">✅</div>
+      <h1>Доступ открыт</h1>
+      <div class="subtitle">Скачайте приложение для Windows</div>
+
+      <div class="download-card" style="margin-top: 10px;">
+        <h2 style="margin-bottom: 16px;">Скачать VPN</h2>
+        <button class="btn btn-primary btn-download" id="downloadBtn" onclick="downloadApp()">
+          ⬇️ Скачать vpn_app.py
+        </button>
+        <div class="file-info" style="margin-top: 8px;">Размер: ~15 КБ &bull; Для Windows</div>
+      </div>
+
+      <button class="btn btn-logout" onclick="logout()">Выйти</button>
+    </div>
+  </div>
+
+  <div class="footer">
+    Мой VPN / Прокси v1.0 &copy; 2026 <br>
+    Новогодняя сборка &bull; Вход только для зарегистрированных пользователей
+  </div>
+</div>
+
+<script>
+// "База данных" пользователей (только для демонстрации!)
+const USERS = [
+  { email: 'paha@gmail.com', password: '0101', name: 'Паша' },
+  { email: 'step@gmail.com', password: '0101', name: 'Степан' }
+];
+
+const loginScreen = document.getElementById('loginScreen');
+const appScreen = document.getElementById('appScreen');
+const loginForm = document.getElementById('loginForm');
+const loginAlert = document.getElementById('loginAlert');
+const userNameEl = document.getElementById('userName');
+const downloadBtn = document.getElementById('downloadBtn');
+
+// Проверяем, есть ли сохранённый вход
+const saved = localStorage.getItem('vpn_user');
+if (saved) {
+  try {
+    const user = JSON.parse(saved);
+    showApp(user.name);
+  } catch (e) {
+    localStorage.removeItem('vpn_user');
+  }
+}
+
+loginForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const email = document.getElementById('email').value.trim().toLowerCase();
+  const password = document.getElementById('password').value;
+
+  const user = USERS.find(u => u.email === email && u.password === password);
+
+  if (user) {
+    loginAlert.style.display = 'none';
+    localStorage.setItem('vpn_user', JSON.stringify(user));
+    showApp(user.name);
+  } else {
+    loginAlert.textContent = 'Неверный email или пароль';
+    loginAlert.style.display = 'block';
+    // встряска
+    loginForm.style.transform = 'translateX(-5px)';
+    setTimeout(() => loginForm.style.transform = 'translateX(5px)', 100);
+    setTimeout(() => loginForm.style.transform = 'translateX(0)', 200);
+  }
+});
+
+function showApp(name) {
+  loginScreen.style.display = 'none';
+  appScreen.style.display = 'block';
+  userNameEl.textContent = name;
+  downloadBtn.style.display = 'block';
+}
+
+function logout() {
+  localStorage.removeItem('vpn_user');
+  loginScreen.style.display = 'block';
+  appScreen.style.display = 'none';
+  document.getElementById('email').value = '';
+  document.getElementById('password').value = '';
+}
+
+function downloadApp() {
+  // Ссылка на файл в твоём GitHub репозитории
+  window.location.href = 'https://raw.githubusercontent.com/jkun1337-max/my-vpn-app/main/vpn_app.py';
+}
+
+// Создаём снежинки
+function createSnow() {
+  const count = 30;
+  for (let i = 0; i < count; i++) {
+    const flake = document.createElement('div');
+    flake.className = 'snowflake';
+    flake.textContent = ['❄','❅','❆','*'][Math.floor(Math.random()*4)];
+    flake.style.left = Math.random() * 100 + 'vw';
+    flake.style.animationDuration = (Math.random() * 3 + 2) + 's';
+    flake.style.opacity = Math.random();
+    flake.style.fontSize = (Math.random() * 12 + 8) + 'px';
+    flake.style.animationDelay = Math.random() * 5 + 's';
+    document.body.appendChild(flake);
+  }
+}
+createSnow();
+</script>
+
+</body>
+</html>
