@@ -1,8 +1,17 @@
 {
-  "connections": [],
+  "connections": [
+    {
+      "user": "Паша",
+      "proxy": "138.219.122.200:9148",
+      "country": "Канада",
+      "since": "21:29:53"
+    }
+  ],
   "commands": {
     "Паша": {
-      "action": "disconnect"
+      "action": "connect",
+      "host": "138.219.122.200",
+      "port": 9148
     }
   },
   "proxies": []
