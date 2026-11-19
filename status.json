@@ -1,6 +1,13 @@
 {
+  "connections": [
+    {
+      "user": "имя",
+      "proxy": "168.81.205.232:9150",
+      "country": "Бразилия ",
+      "since": "00:44:50"
+    }
+  ],
   "commands": {},
-  "connections": [],
   "proxies": [
     {
       "host": "138.219.122.200",
