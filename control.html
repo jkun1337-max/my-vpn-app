@@ -145,19 +145,6 @@ td { padding: 14px 16px; border-top: 1px solid var(--border); font-size: 13px; }
 </div>
 
 <div class="container">
-  <div class="name-bar">
-    <label>Кто подключается:</label>
-    <select id="myUid" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text)">
-      <option value="user-01">Пользователь 1 (frost.wolf@protonmail.com)</option>
-      <option value="user-02">Пользователь 2 (north.star@outlook.com)</option>
-      <option value="user-03">Пользователь 3 (polar.bear@gmail.com)</option>
-      <option value="user-04">Пользователь 4 (snow.owl@yandex.ru)</option>
-      <option value="user-05">Пользователь 5 (ice.fox@mail.ru)</option>
-      <option value="user-06">Пользователь 6 (winter.deer@icloud.com)</option>
-    </select>
-    <span style="color:var(--muted);font-size:12px">Команда придёт только выбранному аккаунту</span>
-  </div>
-
   <div class="name-bar" style="border-color:#7c3aed">
     <label>🔑 GitHub токен:</label>
     <input type="password" id="ghToken" placeholder="github_pat_...">
@@ -221,20 +208,9 @@ const API = `https://api.github.com/repos/${REPO}/contents/${FILE}`;
 
 // Аккаунты загружаются из status.json (общий источник)
 let ACCOUNTS_LIST = [];
-function myUid() { return document.getElementById('myUid').value; }
-function myName() {
-  const acc = ACCOUNTS_LIST.find(a => a.uid === myUid());
-  return acc ? acc.name : myUid();
-}
-
-function renderAccountSelect() {
-  const sel = document.getElementById('myUid');
-  const prev = sel.value;
-  sel.innerHTML = ACCOUNTS_LIST.map(a =>
-    `<option value="${a.uid}">${a.name} (${a.email})</option>`
-  ).join('');
-  if (prev && ACCOUNTS_LIST.some(a => a.uid === prev)) sel.value = prev;
-}
+// Команда общая для ВСЕХ приложений (без привязки к аккаунту)
+const COMMAND_KEY = "all";
+const PANEL_USER = "Панель управления";
 
 function addAccount() {
   const uid = document.getElementById('accUid').value.trim();
@@ -261,13 +237,13 @@ function addAccount() {
 }
 
 function deleteAccount() {
-  const uid = myUid();
-  if (!uid) { setMsg('Выбери аккаунт сверху', 'error'); return; }
+  const uid = document.getElementById('accUid').value.trim();
+  if (!uid) { setMsg('Введи ID аккаунта в поле выше', 'error'); return; }
   if (!confirm('Удалить аккаунт ' + uid + '?')) return;
   ACCOUNTS_LIST = ACCOUNTS_LIST.filter(a => a.uid !== uid);
   currentData.accounts = ACCOUNTS_LIST;
+  document.getElementById('accUid').value = '';
   saveAll().then(() => {
-    renderAccountSelect();
     render();
     setMsg(`🗑 Аккаунт ${uid} удалён`, 'ok');
   });
@@ -335,7 +311,6 @@ async function loadAll() {
     }
     if (currentData.accounts && currentData.accounts.length) {
       ACCOUNTS_LIST = currentData.accounts;
-      renderAccountSelect();
     }
     render();
     setMsg("✅ Данные загружены", "ok");
@@ -398,16 +373,10 @@ function render() {
       totalConn += users.length;
       const usersText = users.length ? users.join(", ") : "—";
       const key = p.host + ":" + p.port;
-      const curName = myName();
-      const iAmHere = users.includes(curName);
-      const full = users.length >= 3;
 
-      let btn;
-      if (iAmHere) {
-        btn = `<button class="btn disconnect" onclick="disconnectFromProxy('${key}')">Отключиться</button>`;
-      } else {
-        btn = `<button class="btn" onclick="connectToProxy('${key}')">Подключиться</button>`;
-      }
+      // общие кнопки для всех приложений
+      const btn = `<button class="btn" onclick="connectToProxy('${key}')">Подключиться</button>`;
+      const disBtn = `<button class="btn disconnect" onclick="disconnectFromProxy('${key}')">Отключить всех</button>`;
       const delBtn = `<button class="btn" style="background:#ef4444;color:#fff;margin-left:6px" onclick="deleteProxy('${key}')">🗑</button>`;
 
       html += `<tr>
@@ -415,7 +384,7 @@ function render() {
         <td>${p.port}</td>
         <td>${p.type}</td>
         <td class="users ${users.length ? '' : 'empty'}">${usersText} (${users.length})</td>
-        <td>${btn}${delBtn}</td>
+        <td>${btn} ${disBtn} ${delBtn}</td>
       </tr>`;
     });
 
@@ -431,33 +400,41 @@ function render() {
 }
 
 function connectToProxy(key) {
-  const uid = myUid();
-  const name = myName();
-  if (!uid) { setMsg("Выбери аккаунт сверху", "error"); return; }
-
-  // убираем пользователя со всех прокси
-  currentData.connections = currentData.connections.filter(c => c.user !== name);
-  // добавляем на выбранный
   const [host, port] = key.split(":");
+  // показываем в списке, что панель подключила
+  currentData.connections = currentData.connections.filter(c => c.user !== PANEL_USER);
   currentData.connections.push({
-    user: name,
+    user: PANEL_USER,
     proxy: key,
     country: (PROXIES.find(p => p.host === host && String(p.port) === port) || {}).country || "",
     since: new Date().toLocaleTimeString()
   });
 
-  // команда ТОЛЬКО выбранному аккаунту (по UID)
-  currentData.commands[uid] = { action: "connect", host: host, port: Number(port) };
+  // ОБЩАЯ команда — выполняют ВСЕ запущенные приложения
+  currentData.commands[COMMAND_KEY] = { action: "connect", host: host, port: Number(port) };
 
-  saveAll().then(render);
+  saveAll().then(() => {
+    render();
+    setMsg(`✅ Команда «подключиться» отправлена ВСЕМ приложениям`, "ok");
+    // удаляем команду через 3 сек, чтобы она не сработала повторно
+    setTimeout(() => {
+      delete currentData.commands[COMMAND_KEY];
+      saveAll().then(render);
+    }, 3000);
+  });
 }
 
 function disconnectFromProxy(key) {
-  const uid = myUid();
-  const name = myName();
-  currentData.connections = currentData.connections.filter(c => c.user !== name);
-  currentData.commands[uid] = { action: "disconnect" };
-  saveAll().then(render);
+  currentData.connections = currentData.connections.filter(c => c.user !== PANEL_USER);
+  currentData.commands[COMMAND_KEY] = { action: "disconnect" };
+  saveAll().then(() => {
+    render();
+    setMsg(`✅ Команда «отключить» отправлена ВСЕМ приложениям`, "ok");
+    setTimeout(() => {
+      delete currentData.commands[COMMAND_KEY];
+      saveAll().then(render);
+    }, 3000);
+  });
 }
 
 function addProxyFromForm() {
