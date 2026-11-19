@@ -1,5 +1,70 @@
 {
   "connections": [],
   "commands": {},
-  "proxies": []
+  "proxies": [
+    {
+      "host": "138.219.122.200",
+      "port": 9148,
+      "country": "Канада",
+      "type": "socks5",
+      "user": "7Kufgp",
+      "pass": "KJwuh8"
+    },
+    {
+      "host": "200.71.127.25",
+      "port": 9979,
+      "country": "Канада",
+      "type": "socks5",
+      "user": "7Kufgp",
+      "pass": "KJwuh8"
+    },
+    {
+      "host": "168.196.237.162",
+      "port": 9302,
+      "country": "Канада",
+      "type": "socks5",
+      "user": "7Kufgp",
+      "pass": "KJwuh8"
+    },
+    {
+      "host": "168.196.237.129",
+      "port": 9946,
+      "country": "Канада",
+      "type": "socks5",
+      "user": "7Kufgp",
+      "pass": "KJwuh8"
+    },
+    {
+      "host": "193.32.154.106",
+      "port": 9239,
+      "country": "Украина",
+      "type": "socks5",
+      "user": "2t0GU9",
+      "pass": "B4fozL"
+    },
+    {
+      "host": "193.32.152.105",
+      "port": 9989,
+      "country": "Украина",
+      "type": "socks5",
+      "user": "2t0GU9",
+      "pass": "B4fozL"
+    },
+    {
+      "host": "23.236.141.53",
+      "port": 9330,
+      "country": "сша",
+      "type": "socks5",
+      "user": "hbo8jJ",
+      "pass": "XvSNgd"
+    },
+    {
+      "host": "168.81.205.165",
+      "port": 9899,
+      "country": "Бразилия ",
+      "type": "socks5",
+      "user": "7EggCh",
+      "pass": "Bgj4D5"
+    }
+  ]
 }
