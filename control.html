@@ -89,6 +89,7 @@ td { padding:12px 14px; border-top:1px solid var(--border); font-size:12px; }
 
 <div class="tabs">
   <div class="tab active" id="tabAccounts" onclick="switchTab('accounts')">👤 Аккаунты</div>
+  <div class="tab" id="tabKeys" onclick="switchTab('keys')">🔑 Ключи</div>
   <div class="tab" id="tabProxies" onclick="switchTab('proxies')">🌐 Прокси</div>
 </div>
 
@@ -102,10 +103,12 @@ td { padding:12px 14px; border-top:1px solid var(--border); font-size:12px; }
       <label>Имя:</label><input id="accName" placeholder="имя" style="width:110px">
       <label>Время:</label>
       <select id="accDuration">
-        <option value="0">♾️ Бесконечно</option>
+        <option value="0.0007">⏱️ 1 минута (тест)</option>
+        <option value="0.007">⏱️ 10 минут (тест)</option>
         <option value="1">1 день</option>
         <option value="7">7 дней</option>
         <option value="30">30 дней</option>
+        <option value="0">♾️ Бесконечно</option>
       </select>
       <button class="btn amber" onclick="addAccount()">➕ Добавить</button>
       <span class="hint">Пароль можно оставить пустым — тогда он сгенерируется автоматически</span>
@@ -120,6 +123,30 @@ td { padding:12px 14px; border-top:1px solid var(--border); font-size:12px; }
     <table>
       <tr><th>ID</th><th>Email</th><th>Пароль</th><th>Имя</th><th>Статус</th><th>Действует до</th><th>Действие</th></tr>
       <tbody id="accTable"></tbody>
+    </table>
+  </div>
+
+  <!-- КЛЮЧИ -->
+  <div class="panel" id="panelKeys">
+    <div class="bar" style="border-color:#a855f7">
+      <label>Генерация ключа:</label>
+      <label>Время:</label>
+      <select id="keyDuration">
+        <option value="0.0007">⏱️ 1 минута (тест)</option>
+        <option value="0.007">⏱️ 10 минут (тест)</option>
+        <option value="1">1 день</option>
+        <option value="7">7 дней</option>
+        <option value="30">30 дней</option>
+        <option value="0">♾️ Бесконечно</option>
+      </select>
+      <label>Кому (имя):</label>
+      <input id="keyNote" placeholder="имя/комментарий" style="width:170px">
+      <button class="btn" style="background:#a855f7;color:#fff" onclick="generateKey()">➕ Создать ключ</button>
+      <span class="hint">Ключ активируется в приложении через «Настройки → Ввод ключа»</span>
+    </div>
+    <table>
+      <tr><th>Ключ</th><th>Время</th><th>Активировал</th><th>Статус</th><th>Действие</th></tr>
+      <tbody id="keyTable"></tbody>
     </table>
   </div>
 
@@ -170,12 +197,15 @@ if(sessionStorage.getItem('panel_unlocked')==='1') document.getElementById('lock
 // --- Tabs ---
 function switchTab(t){
   document.getElementById('panelAccounts').classList.toggle('active', t==='accounts');
+  document.getElementById('panelKeys').classList.toggle('active', t==='keys');
   document.getElementById('panelProxies').classList.toggle('active', t==='proxies');
   document.getElementById('tabAccounts').classList.toggle('active', t==='accounts');
+  document.getElementById('tabKeys').classList.toggle('active', t==='keys');
   document.getElementById('tabProxies').classList.toggle('active', t==='proxies');
+  if(t==='keys') renderKeys();
 }
 
-let currentData={connections:[],commands:{},proxies:[],accounts:[]};
+let currentData={connections:[],commands:{},proxies:[],accounts:[],keys:[]};
 let currentSha=null;
 
 function getToken(){ return localStorage.getItem('snowvpn_token')||''; }
@@ -208,7 +238,9 @@ async function loadAll(){
     currentData.commands=currentData.commands||{};
     currentData.proxies=currentData.proxies||[];
     currentData.accounts=currentData.accounts||[];
+    currentData.keys=currentData.keys||[];
     renderAccounts();
+    renderKeys();
     renderProxies();
     setMsg('✅ Данные загружены','ok');
   }catch(e){ setMsg('❌ Ошибка: '+e.message,'error'); }
@@ -240,7 +272,7 @@ async function addAccount(){
   const email=document.getElementById('accEmail').value.trim();
   let password=document.getElementById('accPass').value.trim();
   const name=document.getElementById('accName').value.trim();
-  const days=parseInt(document.getElementById('accDuration').value)||0;
+  const days=parseFloat(document.getElementById('accDuration').value)||0;
   if(!uid||!email){ setMsg('❌ Заполни ID и Email','error'); return; }
   if(currentData.accounts.some(a=>a.uid===uid)){ setMsg('⚠️ Такой ID уже есть','error'); return; }
   if(!password) password=randomPass();
@@ -363,6 +395,55 @@ async function deleteProxy(key){
   currentData.connections=currentData.connections.filter(c=>c.proxy!==key);
   const ok=await saveAll();
   if(ok){ renderProxies(); setMsg('🗑 Прокси удалён','ok'); }
+}
+
+// --- Ключи ---
+function genKeyString(){
+  const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let k='SNOW-';
+  for(let i=0;i<4;i++) k+=c[Math.floor(Math.random()*c.length)]+'-';
+  return k.slice(0,-1);
+}
+
+async function generateKey(){
+  const days=parseFloat(document.getElementById('keyDuration').value)||0;
+  const note=document.getElementById('keyNote').value.trim();
+  const key=genKeyString();
+  const duration=days>0 ? days*24*3600*1000 : null;
+  currentData.keys=currentData.keys||[];
+  currentData.keys.push({
+    key, duration, note,
+    activatedBy:null, activatedAt:null, expiresAt:null
+  });
+  document.getElementById('keyNote').value='';
+  const ok=await saveAll();
+  if(ok){ renderKeys(); setMsg(`✅ Ключ создан: ${key}`,'ok'); }
+}
+
+async function deleteKey(key){
+  if(!confirm('Удалить ключ '+key+'?')) return;
+  currentData.keys=(currentData.keys||[]).filter(k=>k.key!==key);
+  const ok=await saveAll();
+  if(ok){ renderKeys(); setMsg('🗑 Ключ удалён','ok'); }
+}
+
+function renderKeys(){
+  const tb=document.getElementById('keyTable');
+  if(!tb) return;
+  tb.innerHTML='';
+  (currentData.keys||[]).forEach(k=>{
+    const tr=document.createElement('tr');
+    let status='<span class="status-warn">Не активирован</span>';
+    if(k.activatedBy){
+      const exp=k.expiresAt&&Date.now()>k.expiresAt;
+      status=exp?'<span class="status-bad">Истёк</span>':'<span class="status-ok">Активен</span>';
+    }
+    const dur=k.duration?Math.round(k.duration/3600000)+' ч':'♾️';
+    const who=k.activatedBy||'—';
+    tr.innerHTML=`<td><b>${k.key}</b></td><td>${dur}</td><td>${who}</td><td>${status}</td>
+      <td><button class="btn red" onclick="deleteKey('${k.key}')">Удалить</button></td>`;
+    tb.appendChild(tr);
+  });
 }
 
 function setMsg(t,c){ const e=document.getElementById('msg'); e.innerHTML=t; e.className='msg '+(c||''); }
