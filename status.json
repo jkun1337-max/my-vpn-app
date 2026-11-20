@@ -123,14 +123,6 @@
       "password": "Wd2!yN9@kL5&pV",
       "active": true,
       "expires": null
-    },
-    {
-      "uid": "step0101",
-      "email": "step@gmail.com",
-      "password": "0101",
-      "name": "step",
-      "active": true,
-      "expires": null
     }
   ]
 }
