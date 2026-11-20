@@ -305,7 +305,7 @@ class SharedStatus:
             req = urllib.request.Request(STATUS_API_URL,
                 headers={"User-Agent": "SnowVPN",
                          "Authorization": f"Bearer {GITHUB_TOKEN}"})
-            with urllib.request.urlopen(req, timeout=3) as r:
+            with urllib.request.urlopen(req, timeout=6) as r:
                 d = json.loads(r.read().decode("utf-8"))
                 self._sha = d.get("sha")
                 content = json.loads(base64.b64decode(d.get("content", "")))
@@ -637,6 +637,11 @@ class SnowVPNApp:
         if hasattr(self, "home_canvas"):
             self._redraw_home(self.home_canvas.winfo_width(), self.home_canvas.winfo_height())
         self._refresh_all()
+        # сразу подтягиваем актуальные прокси/аккаунты с GitHub (не ждём 15 сек)
+        self.shared.load()
+        self._sync_proxies_from_panel()
+        self._refresh_all()
+        self.log(f"📡 Загружено прокси: {len(self.config.proxies)}")
         self._start_status_refresh()
         self._tick_uptime()
         self._twinkle()
