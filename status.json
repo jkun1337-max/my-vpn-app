@@ -82,16 +82,6 @@
       "pass": "Bgj4D5"
     }
   ],
-  "accounts": [
-    {
-      "uid": "gandonchik",
-      "email": "gandonchik",
-      "password": "gandonchik",
-      "name": "gandonchik",
-      "active": true,
-      "expires": null,
-      "shownPassword": true
-    }
-  ],
+  "accounts": [],
   "keys": []
 }
