@@ -65,10 +65,24 @@ APP_VERSION = "1.0"
 # Токен читается из файла token.txt рядом с приложением (НЕ вшит в код —
 # иначе GitHub заблокирует загрузку из-за обнаруженного секрета).
 TOKEN_FILE = "token.txt"
+def _token_path():
+    import sys as _s
+    # ищем рядом с исполняемым файлом / скриптом
+    base = os.path.dirname(os.path.abspath(_s.argv[0]))
+    p = os.path.join(base, TOKEN_FILE)
+    if os.path.exists(p):
+        return p
+    if getattr(_s, "_MEIPASS", None):
+        p2 = os.path.join(_s._MEIPASS, TOKEN_FILE)
+        if os.path.exists(p2):
+            return p2
+    return TOKEN_FILE  # fallback на текущую папку
+
 def _load_token():
     try:
-        if os.path.exists(TOKEN_FILE):
-            with open(TOKEN_FILE, "r", encoding="utf-8") as f:
+        p = _token_path()
+        if os.path.exists(p):
+            with open(p, "r", encoding="utf-8") as f:
                 return f.read().strip()
     except Exception:
         pass
@@ -1371,25 +1385,40 @@ class SnowVPNApp:
         threading.Thread(target=loop, daemon=True).start()
 
     def logout_app(self):
-        """Выход из аккаунта — показываем окно логина заново"""
+        """Выход из аккаунта — показываем окно логина заново (в том же процессе)"""
         if self.running:
             self.disconnect()
-        if os.path.exists(AUTH_FILE):
-            try:
-                os.remove(AUTH_FILE)
-            except Exception:
-                pass
-        if self.tray_icon:
-            try:
-                self.tray_icon.stop()
-            except Exception:
-                pass
-        # чиcтый перезапуск приложения (новый процесс = окно логина)
+        # удаляем сохранённую авторизацию
         try:
-            python = sys.executable
-            os.execv(python, [python] + sys.argv)
+            if os.path.exists(AUTH_FILE):
+                os.remove(AUTH_FILE)
         except Exception:
-            self.root.destroy()
+            pass
+        try:
+            self.root.protocol("WM_DELETE_WINDOW", lambda: (self.disconnect(), self.root.destroy()))
+            self.root.withdraw()  # скрываем главное окно
+        except Exception:
+            pass
+        # New окно логина в том же процессе
+        login_root = tk.Toplevel(self.root)
+        self._login_root = login_root
+        LoginWindow(login_root, self._on_relogin)
+
+    def _on_relogin(self, user):
+        """Повторный вход после выхода — обновляем данные и показываем окно"""
+        self.my_uid = user.get("uid", "")
+        self.my_name = user.get("name", "")
+        self._kicking = False
+        self.animation_running = True
+        if hasattr(self, "block_frame") and self.block_frame:
+            try:
+                self.block_frame.destroy()
+            except Exception:
+                pass
+            self.block_frame = None
+        self.root.deiconify()
+        self._refresh_all()
+        self.log(f"👤 Снова вошёл: {self.my_name}")
 
     def _check_account_status(self):
         """Если аккаунт удалён/деактивирован/истёк — закрываем приложение"""
