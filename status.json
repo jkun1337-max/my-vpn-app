@@ -84,14 +84,6 @@
   ],
   "accounts": [
     {
-      "email": "frost.wolf@protonmail.com",
-      "name": "Пользователь 1",
-      "uid": "user-01",
-      "password": "Fw9#kL2!vN8@qR",
-      "active": true,
-      "expires": null
-    },
-    {
       "email": "polar.bear@gmail.com",
       "name": "Пользователь 3",
       "uid": "user-03",
