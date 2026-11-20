@@ -21,6 +21,8 @@ import urllib.error
 import base64
 import ctypes
 import uuid
+import hashlib
+import platform
 import winreg
 from datetime import datetime
 from PIL import Image, ImageTk, ImageDraw
@@ -47,8 +49,14 @@ BG_IMAGE = None  # создаётся в VPNApp.__init__ после root
 # Константы
 # -----------------------------
 CONFIG_FILE = "config.json"
+AUTH_FILE = "auth.json"
 LOCAL_PROXY_PORT = 8080
 USER_ID = socket.gethostname()
+
+def device_fingerprint():
+    """Отпечаток устройства (НЕ IP — IP меняется при включении VPN)"""
+    raw = f"{platform.node()}|{platform.platform()}|{platform.machine()}|{USER_ID}"
+    return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 APP_TITLE = "SnowVPN — Мой VPN / Прокси"
 APP_VERSION = "1.0"
@@ -900,19 +908,12 @@ class SnowVPNApp:
         self.country_combo.bind("<<ComboboxSelected>>", self.on_country_selected)
         c.create_window(cx, cy + th // 2 + 100, window=self.country_combo, anchor="center")
 
-        # Нижние кнопки
-        n = 3
-        bw2 = min(170, (w - pad * 2 - 20) // n)
-        gap = 8
-        total = bw2 * n + gap * (n - 1)
-        startx = (w - total) // 2
+        # Нижняя кнопка — только Белый список
+        bw2 = 220
+        startx = (w - bw2) // 2
         by = h - 58
         self._draw_canvas_button(c, startx, by, bw2, 44, "\U0001f4cb  Белый список",
                                  lambda: self.switch_tab("whitelist", "Белый список"))
-        self._draw_canvas_button(c, startx + bw2 + gap, by, bw2, 44, "\U0001f50d  Прозрачный режим",
-                                 self.toggle_transparent)
-        self._draw_canvas_button(c, startx + 2 * (bw2 + gap), by, bw2, 44, "\u26a1  Автоподключение",
-                                 self.toggle_auto)
 
         self._refresh_all()
 
@@ -1316,11 +1317,55 @@ class SnowVPNApp:
                 try:
                     self.shared.load()
                     self.root.after(0, self._sync_proxies_from_panel)
+                    self.root.after(0, self._check_account_status)
                     self.root.after(0, self._refresh_all)
                     self.root.after(0, self._check_web_commands)
                 except Exception:
                     pass
         threading.Thread(target=loop, daemon=True).start()
+
+    def _check_account_status(self):
+        """Если аккаунт удалён/деактивирован/истёк — закрываем приложение"""
+        uid = getattr(self, "my_uid", "")
+        if not uid:
+            return
+        accs = self.shared.accounts
+        if not accs:
+            return
+        acc = next((a for a in accs if a.get("uid") == uid), None)
+        if not acc:
+            self._account_kicked("Аккаунт удалён")
+            return
+        if not acc.get("active", True):
+            self._account_kicked("Аккаунт деактивирован")
+            return
+        exp = acc.get("expires")
+        if exp and time.time() * 1000 > exp:
+            self._account_kicked("Подписка кончилась")
+            return
+
+    def _account_kicked(self, reason):
+        """Показывает сообщение и закрывает приложение"""
+        if getattr(self, "_kicking", False):
+            return
+        self._kicking = True
+        if self.running:
+            try:
+                self.disconnect()
+            except Exception:
+                pass
+        messagebox.showerror("SnowVPN", f"{reason}\n\nОбратись к администратору.")
+        if self.tray_icon:
+            try:
+                self.tray_icon.stop()
+            except Exception:
+                pass
+        if os.path.exists(AUTH_FILE):
+            try:
+                os.remove(AUTH_FILE)
+            except Exception:
+                pass
+        self.root.destroy()
 
     def _sync_proxies_from_panel(self):
         """Синхронизирует список прокси с веб-панелью (общий источник status.json)"""
@@ -1351,20 +1396,19 @@ class SnowVPNApp:
             if to_remove or len(self.config.proxies) != len(remote):
                 self.config.save()
 
-        # Синхронизируем аккаунты (логин/пароль/ID) из панели
+        # Синхронизируем аккаунты (логин/пароль/ID/статус) из панели — полная замена
         if self.shared.accounts:
-            for acc in self.shared.accounts:
-                uid = acc.get("uid", "")
-                if not uid:
-                    continue
-                if not any(u["uid"] == uid for u in USERS_DB):
-                    USERS_DB.append({
-                        "uid": uid,
-                        "email": acc.get("email", ""),
-                        "password": acc.get("password", ""),
-                        "name": acc.get("name", uid)
-                    })
-                    self.log(f"👤 Веб-панель: добавлен аккаунт {uid}")
+            USERS_DB[:] = [
+                {
+                    "uid": a.get("uid", ""),
+                    "email": a.get("email", ""),
+                    "password": a.get("password", ""),
+                    "name": a.get("name", ""),
+                    "active": a.get("active", True),
+                    "expires": a.get("expires")
+                }
+                for a in self.shared.accounts if a.get("uid")
+            ]
 
     def _check_web_commands(self):
         """Выполняет ОБЩУЮ команду из панели (приходит всем приложениям)"""
@@ -1739,19 +1783,18 @@ class SnowVPNApp:
 
 
 class LoginWindow:
-    """Окно входа в приложение"""
+    """Окно входа с сохранением авторизации по устройству"""
     def __init__(self, root, on_success):
         self.root = root
         self.on_success = on_success
         self.root.title("SnowVPN — Вход")
-        self.root.geometry("420x420")
+        self.root.geometry("420x430")
         self.root.resizable(False, False)
         self.root.configure(bg=BG_DARK)
 
-        # центрируем
         self.root.update_idletasks()
         x = (self.root.winfo_screenwidth() // 2) - 210
-        y = (self.root.winfo_screenheight() // 2) - 210
+        y = (self.root.winfo_screenheight() // 2) - 215
         self.root.geometry(f"+{x}+{y}")
 
         header = tk.Frame(self.root, bg=SIDEBAR_BG, height=70)
@@ -1792,16 +1835,94 @@ class LoginWindow:
                               font=("Segoe UI", 10))
         self.alert.pack()
 
+        self.remember = tk.BooleanVar(value=True)
+        tk.Checkbutton(card, text="Запомнить меня на этом устройстве",
+                       variable=self.remember, bg=CARD_BG, fg=TEXT_MUTED,
+                       selectcolor=BG_DARK, activebackground=CARD_BG,
+                       activeforeground=TEXT, font=("Segoe UI", 9)).pack(pady=(8, 0))
+
+        # автопроверка сохранённой авторизации
+        self.root.after(200, self.try_saved_login)
+
+    def load_accounts(self):
+        """Достаём актуальные аккаунты из status.json (GitHub)"""
+        try:
+            token = GITHUB_TOKEN
+            if not token:
+                return USERS_DB
+            import urllib.request
+            req = urllib.request.Request(STATUS_API_URL,
+                headers={"User-Agent": "SnowVPN", "Authorization": f"Bearer {token}"})
+            with urllib.request.urlopen(req, timeout=4) as r:
+                d = json.loads(r.read().decode("utf-8"))
+                content = json.loads(base64.b64decode(d.get("content", "")))
+                accs = content.get("accounts", [])
+                if accs:
+                    return accs
+        except Exception:
+            pass
+        return USERS_DB
+
+    def account_status(self, acc):
+        """Проверка: активен ли аккаунт и не истекла ли подписка"""
+        if not acc.get("active", True):
+            return "DEACTIVATED"
+        exp = acc.get("expires")
+        if exp and time.time() * 1000 > exp:
+            return "EXPIRED"
+        return "OK"
+
+    def try_saved_login(self):
+        if not os.path.exists(AUTH_FILE):
+            return
+        try:
+            auth = json.load(open(AUTH_FILE, encoding="utf-8"))
+            uid = auth.get("uid", "")
+            fp = auth.get("device", "")
+            if fp != device_fingerprint():
+                return
+            accs = self.load_accounts()
+            acc = next((a for a in accs if a.get("uid") == uid), None)
+            if not acc:
+                # аккаунт удалён
+                os.remove(AUTH_FILE)
+                self.alert.config(text="Аккаунт удалён — войдите заново")
+                return
+            st = self.account_status(acc)
+            if st == "DEACTIVATED":
+                self.alert.config(text="Аккаунт деактивирован")
+                return
+            if st == "EXPIRED":
+                self.alert.config(text="Подписка кончилась")
+                return
+            # всё ок — входим
+            self.root.destroy()
+            self.on_success(acc)
+        except Exception:
+            pass
+
     def try_login(self):
         email = self.email.get().strip().lower()
         password = self.password.get()
-        user = next((u for u in USERS_DB
-                     if u["email"].lower() == email and u["password"] == password), None)
-        if user:
-            self.root.destroy()
-            self.on_success(user)
-        else:
+        accs = self.load_accounts()
+        user = next((u for u in accs
+                     if str(u.get("email", "")).lower() == email
+                     and u.get("password") == password), None)
+        if not user:
             self.alert.config(text="Неверный email или пароль")
+            return
+        st = self.account_status(user)
+        if st == "DEACTIVATED":
+            self.alert.config(text="Аккаунт деактивирован")
+            return
+        if st == "EXPIRED":
+            self.alert.config(text="Подписка кончилась")
+            return
+        if self.remember.get():
+            json.dump({"uid": user.get("uid", ""), "device": device_fingerprint()},
+                      open(AUTH_FILE, "w", encoding="utf-8"))
+        self.root.destroy()
+        self.on_success(user)
 
 
 def run_main_app(user):
