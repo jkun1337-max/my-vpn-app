@@ -76,14 +76,5 @@
     }
   ],
   "accounts": [],
-  "keys": [
-    {
-      "key": "SNOW-Z-7-5-B",
-      "duration": 60480,
-      "note": "1",
-      "activatedBy": "1",
-      "activatedAt": 1795185259212,
-      "expiresAt": 1795185319692.9197
-    }
-  ]
+  "keys": []
 }
