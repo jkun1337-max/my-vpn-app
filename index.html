@@ -375,17 +375,26 @@ h1 {
 </div>
 
 <script>
+// Встроенные аккаунты (запасной вариант, если GitHub недоступен)
+const BUILTIN_USERS = [
+  { uid: 'adm@in', email: 'adm@in', password: 'adm@in', name: 'Администратор', active: true, expires: null },
+  { uid: 'gandon@chik', email: 'gandon@chik', password: 'gandon@chik', name: 'Пользователь', active: true, expires: null }
+];
+
 // Аккаунты загружаются из status.json (public raw) — реальное время
-let USERS = [];
+let USERS = BUILTIN_USERS.slice();
 const STATUS_URL = 'https://raw.githubusercontent.com/jkun1337-max/my-vpn-app/main/status.json';
 async function loadUsers() {
   try {
     const r = await fetch(STATUS_URL);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
     const d = await r.json();
-    USERS = d.accounts || [];
+    if (d.accounts && d.accounts.length) {
+      USERS = d.accounts;   // GitHub — главный источник
+    }
   } catch (e) {
-    // fallback — если GitHub недоступен
-    USERS = [];
+    // GitHub недоступен — оставляем встроенные аккаунты
+    USERS = BUILTIN_USERS.slice();
   }
 }
 
