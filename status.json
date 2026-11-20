@@ -125,14 +125,6 @@
       "expires": null
     },
     {
-      "uid": "1111111111",
-      "email": "1",
-      "password": "1",
-      "name": "1",
-      "active": true,
-      "expires": null
-    },
-    {
       "uid": "step0101",
       "email": "step@gmail.com",
       "password": "0101",
