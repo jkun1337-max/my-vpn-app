@@ -93,22 +93,5 @@
       "shownPassword": true
     }
   ],
-  "keys": [
-    {
-      "key": "SNOW-U-U-T-U",
-      "duration": 60480,
-      "note": "",
-      "activatedBy": null,
-      "activatedAt": null,
-      "expiresAt": null
-    },
-    {
-      "key": "SNOW-2-5-W-N",
-      "duration": 60480,
-      "note": "",
-      "activatedBy": null,
-      "activatedAt": null,
-      "expiresAt": null
-    }
-  ]
+  "keys": []
 }
