@@ -5,557 +5,370 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SnowVPN — Панель управления</title>
 <style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
+* { margin:0; padding:0; box-sizing:border-box; }
 :root {
-  --bg: #0b1220;
-  --sidebar: #0f172a;
-  --card: #131c2e;
-  --accent: #38bdf8;
-  --success: #22c55e;
-  --error: #ef4444;
-  --warning: #eab308;
-  --text: #e2e8f0;
-  --muted: #8b98ad;
-  --border: #1e293b;
+  --bg:#080d18; --sidebar:#0d1526; --card:#121d32; --card2:#16233d;
+  --accent:#38bdf8; --accent2:#0ea5e9; --green:#22c55e; --red:#ef4444;
+  --amber:#f59e0b; --text:#e2e8f0; --muted:#8b98ad; --border:#1e293b;
 }
-body {
-  font-family: 'Segoe UI', sans-serif;
-  background: var(--bg);
-  color: var(--text);
-  min-height: 100vh;
-}
-.header {
-  background: var(--sidebar);
-  padding: 18px 28px;
-  display: flex;
-  align-items: center;
-  border-bottom: 1px solid var(--border);
-}
-.header h1 { color: var(--accent); font-size: 20px; }
-.header .badge { margin-left: 12px; color: var(--muted); font-size: 11px; }
-.refresh-btn {
-  margin-left: auto;
-  background: var(--card);
-  color: var(--accent);
-  border: 1px solid var(--border);
-  padding: 8px 16px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 12px;
-}
-.refresh-btn:hover { background: var(--accent); color: #000; }
+body { font-family:'Segoe UI',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
 
-.container { max-width: 1100px; margin: 0 auto; padding: 24px; }
+/* Lock */
+#lockScreen { position:fixed; inset:0; z-index:9999; background:#050912; display:flex; align-items:center; justify-content:center; }
+.lock-card { background:var(--card); border:1px solid var(--border); border-radius:18px; padding:40px; width:360px; text-align:center; box-shadow:0 30px 80px rgba(0,0,0,.6); }
+.lock-card h2 { color:var(--accent); margin-bottom:6px; font-size:22px; }
+.lock-card p { color:var(--muted); font-size:12px; margin-bottom:24px; }
+.lock-card input { width:100%; background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:13px; color:var(--text); font-size:14px; outline:none; }
+.lock-card input:focus { border-color:var(--accent); }
+.lock-err { color:var(--red); font-size:12px; margin-top:12px; min-height:16px; }
 
-.name-bar {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 16px 20px;
-  margin-bottom: 20px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.name-bar label { color: var(--muted); font-size: 13px; }
-.name-bar input {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px 14px;
-  color: var(--text);
-  font-size: 14px;
-  flex: 1;
-  max-width: 300px;
-}
-.name-bar input:focus { outline: none; border-color: var(--accent); }
+.header { background:var(--sidebar); padding:16px 26px; display:flex; align-items:center; border-bottom:1px solid var(--border); position:sticky; top:0; z-index:50; }
+.header h1 { color:var(--accent); font-size:18px; }
+.header .badge { margin-left:12px; color:var(--muted); font-size:11px; }
+.refresh-btn { margin-left:auto; background:var(--card); color:var(--accent); border:1px solid var(--border); padding:8px 16px; border-radius:8px; cursor:pointer; font-size:12px; }
+.refresh-btn:hover { background:var(--accent); color:#000; }
 
-.stats { display: flex; gap: 14px; margin-bottom: 24px; flex-wrap: wrap; }
-.stat {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 18px 24px;
-  flex: 1;
-  min-width: 150px;
-}
-.stat .label { color: var(--muted); font-size: 12px; }
-.stat .value { color: var(--accent); font-size: 26px; font-weight: bold; margin-top: 6px; }
+.tabs { display:flex; gap:8px; padding:18px 26px 0; }
+.tab { background:var(--card); color:var(--muted); border:1px solid var(--border); padding:10px 20px; border-radius:10px 10px 0 0; cursor:pointer; font-size:13px; font-weight:600; }
+.tab.active { background:var(--accent); color:#000; border-color:var(--accent); }
 
-.country-block { margin-bottom: 28px; }
-.country-title { color: var(--accent); font-size: 17px; margin-bottom: 12px; font-weight: bold; }
+.container { max-width:1180px; margin:0 auto; padding:20px 26px 40px; }
+.panel { display:none; }
+.panel.active { display:block; }
 
-table {
-  width: 100%;
-  border-collapse: collapse;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  overflow: hidden;
-}
-th {
-  background: var(--sidebar);
-  color: var(--muted);
-  text-align: left;
-  padding: 14px 16px;
-  font-size: 12px;
-  font-weight: 600;
-}
-td { padding: 14px 16px; border-top: 1px solid var(--border); font-size: 13px; }
-.users { color: var(--success); }
-.users.empty { color: var(--muted); }
-.btn {
-  background: var(--accent);
-  color: #000;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: bold;
-}
-.btn:hover { background: #7dd3fc; }
-.btn.disconnect { background: var(--error); color: #fff; }
-.btn.disconnect:hover { background: #f87171; }
-.btn:disabled { background: #334155; color: #64748b; cursor: not-allowed; }
+.bar { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px 20px; margin-bottom:18px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.bar label { color:var(--muted); font-size:12px; }
+.bar input, .bar select { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:10px 12px; color:var(--text); font-size:13px; outline:none; }
+.bar input:focus, .bar select:focus { border-color:var(--accent); }
+.bar input::placeholder { color:#5b6c8c; }
 
-.status-msg { margin-top: 16px; font-size: 12px; color: var(--muted); }
-.status-msg.error { color: var(--error); }
-.status-msg.ok { color: var(--success); }
+.btn { background:var(--accent); color:#000; border:none; padding:9px 16px; border-radius:8px; cursor:pointer; font-size:12px; font-weight:700; }
+.btn:hover { filter:brightness(1.15); }
+.btn.green { background:var(--green); }
+.btn.red { background:var(--red); color:#fff; }
+.btn.amber { background:var(--amber); color:#000; }
+.btn.gray { background:#334155; color:#94a3b8; }
 
-.spinner {
-  display: inline-block;
-  width: 14px; height: 14px;
-  border: 2px solid var(--border);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  vertical-align: middle;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
+.country-block { margin-bottom:24px; }
+.country-title { color:var(--accent); font-size:15px; margin-bottom:10px; font-weight:700; }
+table { width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+th { background:var(--sidebar); color:var(--muted); text-align:left; padding:12px 14px; font-size:11px; }
+td { padding:12px 14px; border-top:1px solid var(--border); font-size:12px; }
+.status-ok { color:var(--green); } .status-bad { color:var(--red); } .status-warn { color:var(--amber); }
 
-/* Экран блокировки паролем */
-#lockScreen {
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  background: #050912;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.lock-card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  padding: 40px;
-  width: 360px;
-  text-align: center;
-  box-shadow: 0 30px 80px rgba(0,0,0,0.6);
-}
-.lock-card h2 { color: var(--accent); margin-bottom: 6px; font-size: 22px; }
-.lock-card p { color: var(--muted); font-size: 12px; margin-bottom: 24px; }
-.lock-card input {
-  width: 100%;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 13px;
-  color: var(--text);
-  font-size: 14px;
-  outline: none;
-}
-.lock-card input:focus { border-color: var(--accent); }
-.lock-err { color: var(--error); font-size: 12px; margin-top: 12px; min-height: 16px; }
+.stat-row { display:flex; gap:12px; margin-bottom:20px; flex-wrap:wrap; }
+.stat { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px 22px; min-width:160px; }
+.stat .l { color:var(--muted); font-size:11px; }
+.stat .v { color:var(--accent); font-size:24px; font-weight:bold; margin-top:4px; }
+
+.msg { margin-top:14px; font-size:12px; color:var(--muted); min-height:18px; }
+.msg.error { color:var(--red); } .msg.ok { color:var(--green); }
+.spinner { display:inline-block; width:12px; height:12px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin .8s linear infinite; vertical-align:middle; }
+@keyframes spin { to { transform:rotate(360deg); } }
+.hint { color:var(--muted); font-size:11px; margin-top:8px; }
+.toggle { cursor:pointer; user-select:none; }
 </style>
 </head>
 <body>
 
-<!-- Экран блокировки паролем -->
 <div id="lockScreen">
   <div class="lock-card">
     <h2>🔐 SnowVPN</h2>
     <p>Панель управления защищена паролем</p>
     <input type="password" id="lockPass" placeholder="Введите пароль" onkeydown="if(event.key==='Enter')checkLock()">
     <div class="lock-err" id="lockErr"></div>
-    <button class="btn" onclick="checkLock()" style="margin-top:8px">Войти</button>
+    <button class="btn" onclick="checkLock()" style="margin-top:8px;width:100%">Войти</button>
   </div>
 </div>
 
 <div class="header">
-  <span style="font-size:22px">❄️</span>
-  <h1>SnowVPN — Панель управления</h1>
-  <span class="badge">Ручное управление прокси</span>
+  <h1>❄️ SnowVPN — Панель управления</h1>
+  <span class="badge">Управление аккаунтами и прокси</span>
   <button class="refresh-btn" onclick="loadAll()">🔄 Обновить</button>
 </div>
 
+<div class="tabs">
+  <div class="tab active" id="tabAccounts" onclick="switchTab('accounts')">👤 Аккаунты</div>
+  <div class="tab" id="tabProxies" onclick="switchTab('proxies')">🌐 Прокси</div>
+</div>
+
 <div class="container">
-  <div class="name-bar" style="border-color:#7c3aed">
-    <label>🔑 GitHub токен:</label>
-    <input type="password" id="ghToken" placeholder="github_pat_...">
-    <button class="btn" onclick="saveToken()" style="background:#7c3aed;color:#fff">Сохранить</button>
-    <span style="color:var(--muted);font-size:12px">Введи токен один раз — он запомнится в этом браузере</span>
+  <!-- АККАУНТЫ -->
+  <div class="panel active" id="panelAccounts">
+    <div class="bar" style="border-color:#f59e0b">
+      <label>ID:</label><input id="accUid" placeholder="user-07" style="width:100px">
+      <label>Email:</label><input id="accEmail" placeholder="email" style="width:190px">
+      <label>Пароль:</label><input id="accPass" placeholder="пароль" style="width:130px">
+      <label>Имя:</label><input id="accName" placeholder="имя" style="width:110px">
+      <label>Время:</label>
+      <select id="accDuration">
+        <option value="0">♾️ Бесконечно</option>
+        <option value="1">1 день</option>
+        <option value="7">7 дней</option>
+        <option value="30">30 дней</option>
+      </select>
+      <button class="btn amber" onclick="addAccount()">➕ Добавить</button>
+      <span class="hint">Пароль можно оставить пустым — тогда он сгенерируется автоматически</span>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat"><div class="l">Всего аккаунтов</div><div class="v" id="stAccTotal">—</div></div>
+      <div class="stat"><div class="l">Активных</div><div class="v" id="stAccActive">—</div></div>
+      <div class="stat"><div class="l">Отключённых</div><div class="v" id="stAccOff">—</div></div>
+    </div>
+
+    <table>
+      <tr><th>ID</th><th>Email</th><th>Пароль</th><th>Имя</th><th>Статус</th><th>Действует до</th><th>Действие</th></tr>
+      <tbody id="accTable"></tbody>
+    </table>
   </div>
 
-  <!-- Форма добавления прокси -->
-  <div class="name-bar" style="border-color:#22c55e; flex-wrap:wrap">
-    <label>➕ Добавить прокси:</label>
-    <select id="pxType" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text)">
-      <option value="socks5">SOCKS5</option>
-      <option value="http">HTTP</option>
-    </select>
-    <input type="text" id="pxAddr" placeholder="IP:порт  (например 1.2.3.4:1080)" style="max-width:260px">
-    <input type="text" id="pxUser" placeholder="Логин" style="max-width:120px">
-    <input type="text" id="pxPass" placeholder="Пароль" style="max-width:120px">
-    <input type="text" id="pxCountry" placeholder="Страна (напиши сам)" list="countryList" style="max-width:150px">
-    <datalist id="countryList">
-      <option value="Канада"></option>
-      <option value="Украина"></option>
-      <option value="Россия"></option>
-    </datalist>
-    <button class="btn" onclick="addProxyFromForm()" style="background:#22c55e;color:#000">Добавить</button>
-    <span style="color:var(--muted);font-size:12px;width:100%;margin-top:6px">
-      Вставь адрес с портом через двоеточие. Прокси появится у всех, кто открыл панель, и в приложении.
-    </span>
+  <!-- ПРОКСИ -->
+  <div class="panel" id="panelProxies">
+    <div class="bar">
+      <label>🔑 GitHub токен:</label>
+      <input type="password" id="ghToken" placeholder="github_pat_..." style="width:250px">
+      <button class="btn" onclick="saveToken()">Сохранить</button>
+      <span class="hint">Токен хранится только в этом браузере</span>
+    </div>
+    <div class="bar" style="border-color:#22c55e">
+      <label>Добавить прокси:</label>
+      <select id="pxType"><option value="socks5">SOCKS5</option><option value="http">HTTP</option></select>
+      <input id="pxAddr" placeholder="IP:порт" style="width:200px">
+      <input id="pxUser" placeholder="Логин (необязательно)" style="width:160px">
+      <input id="pxPass" placeholder="Пароль (необязательно)" style="width:160px">
+      <input id="pxCountry" placeholder="Страна" style="width:130px">
+      <button class="btn green" onclick="addProxyFromForm()">Добавить</button>
+      <span class="hint">Логин/пароль можно оставить пустыми — для прокси без авторизации</span>
+    </div>
+    <div class="country-block" id="proxyBlocks"></div>
   </div>
 
-  <!-- Управление аккаунтами -->
-  <div class="name-bar" style="border-color:#f59e0b; flex-wrap:wrap">
-    <label>👤 Аккаунты:</label>
-    <input type="text" id="accUid" placeholder="ID (user-07)" style="max-width:120px">
-    <input type="text" id="accEmail" placeholder="Email" style="max-width:210px">
-    <input type="text" id="accPass" placeholder="Пароль" style="max-width:140px">
-    <input type="text" id="accName" placeholder="Имя" style="max-width:120px">
-    <button class="btn" onclick="addAccount()" style="background:#f59e0b;color:#000">➕ Добавить</button>
-    <button class="btn" onclick="deleteAccount()" style="background:#ef4444;color:#fff">🗑 Удалить выбранный</button>
-    <span style="color:var(--muted);font-size:12px;width:100%;margin-top:6px">
-      Добавь или удали аккаунт. Изменения появятся в приложении через 15 сек.
-    </span>
-  </div>
-
-  <div class="stats">
-    <div class="stat"><div class="label">Всего прокси</div><div class="value" id="statTotal">—</div></div>
-    <div class="stat"><div class="label">Канада</div><div class="value" id="statCa">—</div></div>
-    <div class="stat"><div class="label">Украина</div><div class="value" id="statUa">—</div></div>
-    <div class="stat"><div class="label">Подключено людей</div><div class="value" id="statConn">—</div></div>
-  </div>
-
-  <div id="countryBlocks"></div>
-  <div class="status-msg" id="msg">Загрузка...</div>
+  <div class="msg" id="msg">Загрузка...</div>
 </div>
 
 <script>
-// --- НАСТРОЙКИ ---
-// Токен НЕ вшит в код — он вводится в поле выше и хранится только в твоём браузере.
-const REPO = "jkun1337-max/my-vpn-app";
-const FILE = "status.json";
-const API = `https://api.github.com/repos/${REPO}/contents/${FILE}`;
+const REPO="jkun1337-max/my-vpn-app";
+const FILE="status.json";
+const API=`https://api.github.com/repos/${REPO}/contents/${FILE}`;
+const COMMAND_KEY="all";
+const PANEL_USER="Панель управления";
+const PANEL_PASSWORD="Berlin-1488";
 
-// Аккаунты загружаются из status.json (общий источник)
-let ACCOUNTS_LIST = [];
-// Команда общая для ВСЕХ приложений (без привязки к аккаунту)
-const COMMAND_KEY = "all";
-const PANEL_USER = "Панель управления";
-
-function addAccount() {
-  const uid = document.getElementById('accUid').value.trim();
-  const email = document.getElementById('accEmail').value.trim();
-  const password = document.getElementById('accPass').value.trim();
-  const name = document.getElementById('accName').value.trim();
-  if (!uid || !email || !password) {
-    setMsg('❌ Заполни ID, Email и Пароль', 'error'); return;
-  }
-  if (ACCOUNTS_LIST.some(a => a.uid === uid)) {
-    setMsg('⚠️ Такой ID уже есть', 'error'); return;
-  }
-  ACCOUNTS_LIST.push({ uid, email, password, name: name || uid });
-  currentData.accounts = ACCOUNTS_LIST;
-  document.getElementById('accUid').value = '';
-  document.getElementById('accEmail').value = '';
-  document.getElementById('accPass').value = '';
-  document.getElementById('accName').value = '';
-  saveAll().then(() => {
-    renderAccountSelect();
-    render();
-    setMsg(`✅ Аккаунт ${uid} добавлен`, 'ok');
-  });
-}
-
-function deleteAccount() {
-  const uid = document.getElementById('accUid').value.trim();
-  if (!uid) { setMsg('Введи ID аккаунта в поле выше', 'error'); return; }
-  if (!confirm('Удалить аккаунт ' + uid + '?')) return;
-  ACCOUNTS_LIST = ACCOUNTS_LIST.filter(a => a.uid !== uid);
-  currentData.accounts = ACCOUNTS_LIST;
-  document.getElementById('accUid').value = '';
-  saveAll().then(() => {
-    render();
-    setMsg(`🗑 Аккаунт ${uid} удалён`, 'ok');
-  });
-}
-
-// --- Блокировка паролем ---
-const PANEL_PASSWORD = "Berlin-1488";
-function checkLock() {
-  const v = document.getElementById('lockPass').value;
-  if (v === PANEL_PASSWORD) {
-    sessionStorage.setItem('panel_unlocked', '1');
-    document.getElementById('lockScreen').style.display = 'none';
-  } else {
-    const e = document.getElementById('lockErr');
-    e.textContent = 'Неверный пароль';
-    document.getElementById('lockPass').value = '';
+// --- Lock ---
+function checkLock(){
+  if(document.getElementById('lockPass').value===PANEL_PASSWORD){
+    sessionStorage.setItem('panel_unlocked','1');
+    document.getElementById('lockScreen').style.display='none';
+  }else{
+    document.getElementById('lockErr').textContent='Неверный пароль';
+    document.getElementById('lockPass').value='';
   }
 }
-if (sessionStorage.getItem('panel_unlocked') === '1') {
-  document.getElementById('lockScreen').style.display = 'none';
+if(sessionStorage.getItem('panel_unlocked')==='1') document.getElementById('lockScreen').style.display='none';
+
+// --- Tabs ---
+function switchTab(t){
+  document.getElementById('panelAccounts').classList.toggle('active', t==='accounts');
+  document.getElementById('panelProxies').classList.toggle('active', t==='proxies');
+  document.getElementById('tabAccounts').classList.toggle('active', t==='accounts');
+  document.getElementById('tabProxies').classList.toggle('active', t==='proxies');
 }
 
-function getToken() {
-  return localStorage.getItem('snowvpn_token') || '';
-}
-function saveToken() {
-  const t = document.getElementById('ghToken').value.trim();
-  if (!t) { setMsg('Введи токен', 'error'); return; }
-  localStorage.setItem('snowvpn_token', t);
-  setMsg('✅ Токен сохранён в этом браузере', 'ok');
+let currentData={connections:[],commands:{},proxies:[],accounts:[]};
+let currentSha=null;
+
+function getToken(){ return localStorage.getItem('snowvpn_token')||''; }
+function saveToken(){
+  const t=document.getElementById('ghToken').value.trim();
+  if(!t){ setMsg('Введи токен','error'); return; }
+  localStorage.setItem('snowvpn_token',t);
+  setMsg('✅ Токен сохранён','ok');
   loadAll();
 }
-// подставляем сохранённый токен при загрузке
-window.addEventListener('DOMContentLoaded', () => {
-  const saved = getToken();
-  if (saved) document.getElementById('ghToken').value = saved;
+window.addEventListener('DOMContentLoaded',()=>{
+  const s=getToken(); if(s) document.getElementById('ghToken').value=s;
 });
 
-// Базовый список прокси. При загрузке подменяется списком из status.json
-let PROXIES = [
-  {host:"138.219.122.200", port:9148, country:"Канада", type:"socks5", user:"7Kufgp", pass:"KJwuh8"},
-  {host:"200.71.127.25",   port:9979, country:"Канада", type:"socks5", user:"7Kufgp", pass:"KJwuh8"},
-  {host:"168.196.237.162", port:9302, country:"Канада", type:"socks5", user:"7Kufgp", pass:"KJwuh8"},
-  {host:"168.196.237.129", port:9946, country:"Канада", type:"socks5", user:"7Kufgp", pass:"KJwuh8"},
-  {host:"193.32.154.106",  port:9239, country:"Украина", type:"socks5", user:"2t0GU9", pass:"B4fozL"},
-  {host:"193.32.152.105",  port:9989, country:"Украина", type:"socks5", user:"2t0GU9", pass:"B4fozL"},
-];
+function b64encode(s){ return btoa(unescape(encodeURIComponent(s))); }
+function b64decode(s){ return decodeURIComponent(escape(atob(s))); }
 
-let currentData = { connections: [], commands: {}, proxies: [], accounts: [] };
-let currentSha = null;
+function mask(s){ return s ? '••••••••' : '—'; }
 
-function b64encode(str) {
-  return btoa(unescape(encodeURIComponent(str)));
-}
-function b64decode(str) {
-  return decodeURIComponent(escape(atob(str)));
-}
-
-async function loadAll() {
-  if (!getToken()) {
-    setMsg("⚠️ Введи GitHub-токен в поле выше и нажми «Сохранить»", "error");
-    return;
-  }
+async function loadAll(){
+  if(!getToken()){ setMsg('⚠️ Введи GitHub-токен на вкладке «Прокси» и нажми «Сохранить»','error'); return; }
   setMsg("Загрузка... <span class='spinner'></span>");
-  try {
-    const r = await fetch(API, {
-      headers: { "Authorization": `Bearer ${getToken()}` }
-    });
-    if (!r.ok) throw new Error("HTTP " + r.status);
-    const d = await r.json();
-    currentSha = d.sha;
-    try {
-      currentData = JSON.parse(b64decode(d.content));
-    } catch (e) {
-      currentData = { connections: [], commands: {} };
-    }
-    if (!currentData.connections) currentData.connections = [];
-    if (!currentData.commands) currentData.commands = {};
-    // если в status.json есть свой список прокси — используем его
-    if (currentData.proxies && currentData.proxies.length) {
-      PROXIES = currentData.proxies;
-    }
-    if (currentData.accounts && currentData.accounts.length) {
-      ACCOUNTS_LIST = currentData.accounts;
-    }
-    render();
-    setMsg("✅ Данные загружены", "ok");
-  } catch (e) {
-    setMsg("❌ Ошибка загрузки: " + e.message + " (проверь права токена: Contents: Read and write)", "error");
-  }
+  try{
+    const r=await fetch(API,{headers:{"Authorization":`Bearer ${getToken()}`}});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const d=await r.json();
+    currentSha=d.sha;
+    currentData=JSON.parse(b64decode(d.content));
+    currentData.connections=currentData.connections||[];
+    currentData.commands=currentData.commands||{};
+    currentData.proxies=currentData.proxies||[];
+    currentData.accounts=currentData.accounts||[];
+    renderAccounts();
+    renderProxies();
+    setMsg('✅ Данные загружены','ok');
+  }catch(e){ setMsg('❌ Ошибка: '+e.message,'error'); }
 }
 
-async function saveAll() {
-  try {
-    const payload = b64encode(JSON.stringify(currentData, null, 2));
-    const body = {
-      message: "SnowVPN panel: update",
-      content: payload
-    };
-    if (currentSha) body.sha = currentSha;
-    const r = await fetch(API, {
-      method: "PUT",
-      headers: {
-        "Authorization": `Bearer ${getToken()}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(body)
-    });
-    if (!r.ok) {
-      const err = await r.json();
-      throw new Error(err.message || ("HTTP " + r.status));
-    }
-    setMsg("✅ Изменения сохранены", "ok");
-  } catch (e) {
-    setMsg("❌ Ошибка сохранения: " + e.message, "error");
-  }
+async function saveAll(){
+  try{
+    const payload=b64encode(JSON.stringify(currentData,null,2));
+    const body={message:"SnowVPN: update",content:payload};
+    if(currentSha) body.sha=currentSha;
+    const r=await fetch(API,{method:"PUT",headers:{"Authorization":`Bearer ${getToken()}`,"Content-Type":"application/json"},body:JSON.stringify(body)});
+    if(!r.ok){ const e=await r.json(); throw new Error(e.message||'HTTP '+r.status); }
+    const resp=await r.json();
+    if(resp.content&&resp.content.sha) currentSha=resp.content.sha;
+    setMsg('✅ Изменения сохранены','ok');
+    return true;
+  }catch(e){ setMsg('❌ Ошибка сохранения: '+e.message,'error'); return false; }
 }
 
-function usersOn(host, port) {
-  const key = host + ":" + port;
-  return currentData.connections
-    .filter(c => c.proxy === key)
-    .map(c => c.user);
+// --- Accounts ---
+function randomPass(){
+  const c='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789#@!$%';
+  let p=''; for(let i=0;i<14;i++) p+=c[Math.floor(Math.random()*c.length)];
+  return p;
 }
 
-function render() {
-  const blocks = document.getElementById("countryBlocks");
-  blocks.innerHTML = "";
+async function addAccount(){
+  const uid=document.getElementById('accUid').value.trim();
+  const email=document.getElementById('accEmail').value.trim();
+  let password=document.getElementById('accPass').value.trim();
+  const name=document.getElementById('accName').value.trim();
+  const days=parseInt(document.getElementById('accDuration').value)||0;
+  if(!uid||!email){ setMsg('❌ Заполни ID и Email','error'); return; }
+  if(currentData.accounts.some(a=>a.uid===uid)){ setMsg('⚠️ Такой ID уже есть','error'); return; }
+  if(!password) password=randomPass();
+  const expires=days>0 ? Date.now()+days*24*3600*1000 : null;
+  currentData.accounts.push({uid,email,password,name:name||uid,active:true,expires,shownPassword:true});
+  ['accUid','accEmail','accPass','accName'].forEach(id=>document.getElementById(id).value='');
+  const ok=await saveAll();
+  if(ok){ renderAccounts(); setMsg(`✅ Аккаунт ${uid} добавлен. Пароль: ${mask(password)} (скрыт)`,'ok'); }
+}
 
-  const countries = [...new Set(PROXIES.map(p => p.country))];
-  let totalConn = 0;
+async function toggleAccount(uid){
+  const a=currentData.accounts.find(x=>x.uid===uid);
+  if(!a) return;
+  a.active=!a.active;
+  const ok=await saveAll();
+  if(ok) renderAccounts();
+}
 
-  countries.forEach(country => {
-    const proxies = PROXIES.filter(p => p.country === country);
-    const block = document.createElement("div");
-    block.className = "country-block";
-    block.innerHTML = `<div class="country-title">🌐 ${country}</div>`;
+async function deleteAccount(uid){
+  if(!confirm('Удалить аккаунт '+uid+'? У него вылетит из приложения и сайта.')) return;
+  currentData.accounts=currentData.accounts.filter(a=>a.uid!==uid);
+  const ok=await saveAll();
+  if(ok){ renderAccounts(); setMsg(`🗑 Аккаунт ${uid} удалён`,'ok'); }
+}
 
-    let html = `<table>
+function renderAccounts(){
+  const tb=document.getElementById('accTable');
+  tb.innerHTML='';
+  let active=0, off=0;
+  currentData.accounts.forEach(a=>{
+    const expired=a.expires&&Date.now()>a.expires;
+    const isActive=a.active&&!expired;
+    isActive?active++:off++;
+    const tr=document.createElement('tr');
+    const exp=a.expires?new Date(a.expires).toLocaleDateString():'♾️';
+    let st=isActive?'<span class="status-ok">● Активен</span>':
+            expired?'<span class="status-warn">● Подписка кончилась</span>':
+            '<span class="status-bad">● Деактивирован</span>';
+    tr.innerHTML=`
+      <td>${a.uid}</td><td>${a.email}</td><td>${mask(a.password)}</td><td>${a.name||''}</td>
+      <td>${st}</td><td>${exp}</td>
+      <td>
+        <button class="btn ${a.active?'gray':'green'}" onclick="toggleAccount('${a.uid}')">${a.active?'Деактивировать':'Активировать'}</button>
+        <button class="btn red" onclick="deleteAccount('${a.uid}')">Удалить</button>
+      </td>`;
+    tb.appendChild(tr);
+  });
+  document.getElementById('stAccTotal').textContent=currentData.accounts.length;
+  document.getElementById('stAccActive').textContent=active;
+  document.getElementById('stAccOff').textContent=off;
+}
+
+// --- Proxies ---
+function usersOn(h,p){ const k=h+':'+p; return currentData.connections.filter(c=>c.proxy===k).map(c=>c.user); }
+
+function renderProxies(){
+  const box=document.getElementById('proxyBlocks'); box.innerHTML='';
+  const countries=[...new Set(currentData.proxies.map(p=>p.country))];
+  let total=0;
+  countries.forEach(country=>{
+    const list=currentData.proxies.filter(p=>p.country===country);
+    const block=document.createElement('div'); block.className='country-block';
+    let html=`<div class="country-title">🌐 ${country}</div><table>
       <tr><th>IP / Host</th><th>Порт</th><th>Тип</th><th>Подключён</th><th>Действие</th></tr>`;
-
-    proxies.forEach(p => {
-      const users = usersOn(p.host, p.port);
-      totalConn += users.length;
-      const usersText = users.length ? users.join(", ") : "—";
-      const key = p.host + ":" + p.port;
-
-      // общие кнопки для всех приложений
-      const btn = `<button class="btn" onclick="connectToProxy('${key}')">Подключиться</button>`;
-      const disBtn = `<button class="btn disconnect" onclick="disconnectFromProxy('${key}')">Отключить всех</button>`;
-      const delBtn = `<button class="btn" style="background:#ef4444;color:#fff;margin-left:6px" onclick="deleteProxy('${key}')">🗑</button>`;
-
-      html += `<tr>
-        <td>${p.host}</td>
-        <td>${p.port}</td>
-        <td>${p.type}</td>
-        <td class="users ${users.length ? '' : 'empty'}">${usersText} (${users.length})</td>
-        <td>${btn} ${disBtn} ${delBtn}</td>
-      </tr>`;
+    list.forEach(p=>{
+      const users=usersOn(p.host,p.port); total+=users.length;
+      const k=p.host+':'+p.port;
+      html+=`<tr><td>${p.host}</td><td>${p.port}</td><td>${p.type}</td>
+        <td class="status-ok">${users.join(', ')||'—'} (${users.length})</td>
+        <td>
+          <button class="btn" onclick="connectToProxy('${k}')">Подключиться</button>
+          <button class="btn red" onclick="disconnectFromProxy()">Отключить всех</button>
+          <button class="btn red" onclick="deleteProxy('${k}')">🗑</button>
+        </td></tr>`;
     });
-
-    html += `</table>`;
-    block.innerHTML += html;
-    blocks.appendChild(block);
-  });
-
-  document.getElementById("statTotal").textContent = PROXIES.length;
-  document.getElementById("statCa").textContent = PROXIES.filter(p => p.country === "Канада").length;
-  document.getElementById("statUa").textContent = PROXIES.filter(p => p.country === "Украина").length;
-  document.getElementById("statConn").textContent = totalConn;
-}
-
-function connectToProxy(key) {
-  const [host, port] = key.split(":");
-  // показываем в списке, что панель подключила
-  currentData.connections = currentData.connections.filter(c => c.user !== PANEL_USER);
-  currentData.connections.push({
-    user: PANEL_USER,
-    proxy: key,
-    country: (PROXIES.find(p => p.host === host && String(p.port) === port) || {}).country || "",
-    since: new Date().toLocaleTimeString()
-  });
-
-  // ОБЩАЯ команда — выполняют ВСЕ запущенные приложения
-  currentData.commands[COMMAND_KEY] = { action: "connect", host: host, port: Number(port) };
-
-  saveAll().then(() => {
-    render();
-    setMsg(`✅ Команда «подключиться» отправлена ВСЕМ приложениям`, "ok");
-    // удаляем команду через 3 сек, чтобы она не сработала повторно
-    setTimeout(() => {
-      delete currentData.commands[COMMAND_KEY];
-      saveAll().then(render);
-    }, 3000);
+    html+='</table>'; block.innerHTML=html; box.appendChild(block);
   });
 }
 
-function disconnectFromProxy(key) {
-  currentData.connections = currentData.connections.filter(c => c.user !== PANEL_USER);
-  currentData.commands[COMMAND_KEY] = { action: "disconnect" };
-  saveAll().then(() => {
-    render();
-    setMsg(`✅ Команда «отключить» отправлена ВСЕМ приложениям`, "ok");
-    setTimeout(() => {
-      delete currentData.commands[COMMAND_KEY];
-      saveAll().then(render);
-    }, 3000);
-  });
+async function connectToProxy(key){
+  const [host,port]=key.split(':');
+  currentData.connections=currentData.connections.filter(c=>c.user!==PANEL_USER);
+  currentData.connections.push({user:PANEL_USER,proxy:key,
+    country:(currentData.proxies.find(p=>p.host===host&&String(p.port)===port)||{}).country||'',
+    since:new Date().toLocaleTimeString()});
+  currentData.commands[COMMAND_KEY]={action:'connect',host,port:Number(port)};
+  const ok=await saveAll();
+  if(ok){ renderProxies(); setMsg('✅ Команда отправлена ВСЕМ приложениям','ok');
+    setTimeout(async()=>{ delete currentData.commands[COMMAND_KEY]; await saveAll(); renderProxies(); },3000); }
 }
 
-function addProxyFromForm() {
-  const addr = document.getElementById("pxAddr").value.trim();
-  const type = document.getElementById("pxType").value;
-  const user = document.getElementById("pxUser").value.trim();
-  const pass = document.getElementById("pxPass").value.trim();
-  const country = document.getElementById("pxCountry").value;
-
-  const parts = addr.split(":");
-  if (parts.length !== 2 || !parts[0] || !parts[1] || isNaN(Number(parts[1]))) {
-    setMsg("❌ Формат адреса: IP:порт  (например 1.2.3.4:1080)", "error");
-    return;
-  }
-  const host = parts[0];
-  const port = Number(parts[1]);
-
-  // не добавляем дубликат
-  if (PROXIES.some(p => p.host === host && p.port === port)) {
-    setMsg("⚠️ Такой прокси уже есть в списке", "error");
-    return;
-  }
-
-  PROXIES.push({ host, port, country, type, user, pass });
-  currentData.proxies = PROXIES;
-
-  // очищаем поля
-  document.getElementById("pxAddr").value = "";
-  document.getElementById("pxUser").value = "";
-  document.getElementById("pxPass").value = "";
-
-  saveAll().then(() => {
-    render();
-    setMsg(`✅ Прокси ${host}:${port} добавлен (появится у всех через 15 сек)`, "ok");
-  });
+async function disconnectFromProxy(){
+  currentData.connections=currentData.connections.filter(c=>c.user!==PANEL_USER);
+  currentData.commands[COMMAND_KEY]={action:'disconnect'};
+  const ok=await saveAll();
+  if(ok){ setMsg('✅ Отключение отправлено ВСЕМ','ok');
+    setTimeout(async()=>{ delete currentData.commands[COMMAND_KEY]; await saveAll(); },3000); }
 }
 
-function deleteProxy(key) {
-  if (!confirm("Удалить прокси " + key + "?")) return;
-  const [host, port] = key.split(":");
-  PROXIES = PROXIES.filter(p => !(p.host === host && String(p.port) === port));
-  currentData.proxies = PROXIES;
-  // также убираем подключения к этому прокси
-  currentData.connections = currentData.connections.filter(c => c.proxy !== key);
-  saveAll().then(() => {
-    render();
-    setMsg(`🗑 Прокси ${key} удалён (исчезнет у всех через 15 сек)`, "ok");
-  });
+async function addProxyFromForm(){
+  const addr=document.getElementById('pxAddr').value.trim();
+  const type=document.getElementById('pxType').value;
+  const user=document.getElementById('pxUser').value.trim();
+  const pass=document.getElementById('pxPass').value.trim();
+  const country=document.getElementById('pxCountry').value.trim();
+  const parts=addr.split(':');
+  if(parts.length!==2||!parts[0]||!parts[1]||isNaN(Number(parts[1]))){ setMsg('❌ Формат: IP:порт','error'); return; }
+  const host=parts[0], port=Number(parts[1]);
+  if(currentData.proxies.some(p=>p.host===host&&p.port===port)){ setMsg('⚠️ Такой прокси уже есть','error'); return; }
+  currentData.proxies.push({host,port,country:country||'Другое',type,user,pass});
+  ['pxAddr','pxUser','pxPass'].forEach(id=>document.getElementById(id).value='');
+  const ok=await saveAll();
+  if(ok){ renderProxies(); setMsg(`✅ Прокси ${host}:${port} добавлен`,'ok'); }
 }
 
-function setMsg(text, cls) {
-  const el = document.getElementById("msg");
-  el.innerHTML = text;
-  el.className = "status-msg " + (cls || "");
+async function deleteProxy(key){
+  if(!confirm('Удалить прокси '+key+'?')) return;
+  const [host,port]=key.split(':');
+  currentData.proxies=currentData.proxies.filter(p=>!(p.host===host&&String(p.port)===port));
+  currentData.connections=currentData.connections.filter(c=>c.proxy!==key);
+  const ok=await saveAll();
+  if(ok){ renderProxies(); setMsg('🗑 Прокси удалён','ok'); }
 }
+
+function setMsg(t,c){ const e=document.getElementById('msg'); e.innerHTML=t; e.className='msg '+(c||''); }
 
 loadAll();
-setInterval(loadAll, 15000);
+setInterval(loadAll,10000);
 </script>
-
 </body>
 </html>
