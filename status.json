@@ -81,7 +81,7 @@
       "email": "gandon@chik",
       "password": "gandon@chik",
       "name": "gandon@chik",
-      "active": false,
+      "active": true,
       "expires": 1795187023692,
       "shownPassword": true
     },
