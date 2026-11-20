@@ -77,15 +77,6 @@
   ],
   "accounts": [
     {
-      "uid": "gandon@chik",
-      "email": "gandon@chik",
-      "password": "gandon@chik",
-      "name": "gandon@chik",
-      "active": true,
-      "expires": 1795187023692,
-      "shownPassword": true
-    },
-    {
       "uid": "adm@in",
       "email": "adm@in",
       "password": "adm@in",
