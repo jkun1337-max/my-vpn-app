@@ -93,6 +93,15 @@
       "active": true,
       "expires": null,
       "shownPassword": true
+    },
+    {
+      "uid": "adm@inchik",
+      "email": "adm@inchik",
+      "password": "adm@inchik",
+      "name": "adm@inchik",
+      "active": true,
+      "expires": null,
+      "shownPassword": true
     }
   ],
   "keys": [
