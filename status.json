@@ -75,15 +75,6 @@
       "pass": "Bgj4D5"
     }
   ],
-  "accounts": [
-    {
-      "uid": "gandon@chik",
-      "email": "gandon@chik",
-      "password": "gandon@chik",
-      "name": "gandon@chik",
-      "active": true,
-      "expires": 1795186343324.4617
-    }
-  ],
+  "accounts": [],
   "keys": []
 }
