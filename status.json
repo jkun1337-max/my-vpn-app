@@ -91,7 +91,7 @@
       "password": "1",
       "name": "1",
       "active": true,
-      "expires": 1795184894459,
+      "expires": 1795185184841.5505,
       "shownPassword": true
     }
   ],
@@ -100,9 +100,9 @@
       "key": "SNOW-6-4-8-8",
       "duration": 60480,
       "note": "",
-      "activatedBy": null,
-      "activatedAt": null,
-      "expiresAt": null
+      "activatedBy": "1",
+      "activatedAt": 1795185124361,
+      "expiresAt": 1795185184841.5505
     }
   ]
 }
