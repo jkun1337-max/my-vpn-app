@@ -80,49 +80,65 @@
       "email": "frost.wolf@protonmail.com",
       "name": "Пользователь 1",
       "uid": "user-01",
-      "password": "Fw9#kL2!vN8@qR"
+      "password": "Fw9#kL2!vN8@qR",
+      "active": true,
+      "expires": null
     },
     {
       "email": "north.star@outlook.com",
       "name": "Пользователь 2",
       "uid": "user-02",
-      "password": "Ns3%pT7&wM4#jK"
+      "password": "Ns3%pT7&wM4#jK",
+      "active": true,
+      "expires": null
     },
     {
       "email": "polar.bear@gmail.com",
       "name": "Пользователь 3",
       "uid": "user-03",
-      "password": "Pb6@mQ1!zX9%rD"
+      "password": "Pb6@mQ1!zX9%rD",
+      "active": true,
+      "expires": null
     },
     {
       "email": "snow.owl@yandex.ru",
       "name": "Пользователь 4",
       "uid": "user-04",
-      "password": "So4#vH8&nP2!kL"
+      "password": "So4#vH8&nP2!kL",
+      "active": true,
+      "expires": null
     },
     {
       "email": "ice.fox@mail.ru",
       "name": "Пользователь 5",
       "uid": "user-05",
-      "password": "If7%rB3@wT6#mQ"
+      "password": "If7%rB3@wT6#mQ",
+      "active": true,
+      "expires": null
     },
     {
       "email": "winter.deer@icloud.com",
       "name": "Пользователь 6",
       "uid": "user-06",
-      "password": "Wd2!yN9@kL5&pV"
+      "password": "Wd2!yN9@kL5&pV",
+      "active": true,
+      "expires": null
     },
     {
       "uid": "1111111111",
       "email": "1",
       "password": "1",
-      "name": "1"
+      "name": "1",
+      "active": true,
+      "expires": null
     },
     {
       "uid": "step0101",
       "email": "step@gmail.com",
       "password": "0101",
-      "name": "step"
+      "name": "step",
+      "active": true,
+      "expires": null
     }
   ]
 }
