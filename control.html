@@ -283,6 +283,16 @@ async function addAccount(){
   if(ok){ renderAccounts(); setMsg(`✅ Аккаунт ${uid} добавлен. Пароль: ${mask(password)} (скрыт)`,'ok'); }
 }
 
+async function revokeAccess(uid){
+  if(!confirm('Закрыть доступ аккаунту '+uid+'? У него выключится VPN и откроется экран ввода ключа.')) return;
+  const a=currentData.accounts.find(x=>x.uid===uid);
+  if(!a) return;
+  a.active=false;
+  a.expires=Date.now()-1000; // подписка считается закончившейся
+  const ok=await saveAll();
+  if(ok){ renderAccounts(); setMsg(`🚫 Доступ аккаунта ${uid} закрыт`,'ok'); }
+}
+
 async function toggleAccount(uid){
   const a=currentData.accounts.find(x=>x.uid===uid);
   if(!a) return;
@@ -315,6 +325,7 @@ function renderAccounts(){
       <td>${a.uid}</td><td>${a.email}</td><td>${mask(a.password)}</td><td>${a.name||''}</td>
       <td>${st}</td><td>${exp}</td>
       <td>
+        ${isActive?`<button class="btn red" onclick="revokeAccess('${a.uid}')">🚫 Закрыть доступ</button>`:''}
         <button class="btn ${a.active?'gray':'green'}" onclick="toggleAccount('${a.uid}')">${a.active?'Деактивировать':'Активировать'}</button>
         <button class="btn red" onclick="deleteAccount('${a.uid}')">Удалить</button>
       </td>`;
