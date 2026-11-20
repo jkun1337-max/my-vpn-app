@@ -1484,26 +1484,12 @@ class SnowVPNApp:
         st.keys = [x for x in st.keys if x.get("key") != k.get("key")]
         st.keys.append(k)
         uid = getattr(self, "my_uid", "")
-        found = False
-        for a in st.accounts:
-            if a.get("uid") == uid:
-                a["active"] = True
-                a["expires"] = exp
-                found = True
-        if not found:
-            auth = {}
-            try:
-                auth = json.load(open(AUTH_FILE, encoding="utf-8"))
-            except Exception:
-                pass
-            st.accounts.append({
-                "uid": uid,
-                "email": auth.get("email", ""),
-                "password": auth.get("password", ""),
-                "name": getattr(self, "my_name", uid),
-                "active": True,
-                "expires": exp
-            })
+        # НЕ воскрешаем удалённые аккаунты — если аккаунта нет, ключ не поможет
+        acc = next((a for a in st.accounts if a.get("uid") == uid), None)
+        if not acc:
+            return False, "Аккаунт удалён — ключ не подходит. Обратись к администратору."
+        acc["active"] = True
+        acc["expires"] = exp
         st.save()
         return True, "Ключ активирован"
 
@@ -1593,8 +1579,20 @@ class SnowVPNApp:
 
         tk.Button(inner, text="Активировать", command=apply_key, bg=SUCCESS, fg="#000",
                   relief="flat", font=("Segoe UI", 12, "bold"), cursor="hand2",
-                  padx=30, pady=8).pack(pady=(8, 35))
+                  padx=30, pady=8).pack(pady=(8, 10))
         ent.bind("<Return>", lambda e: apply_key())
+
+        def _logout_from_block():
+            # снимаем блокировку и выходим в окно логина
+            self._kicking = False
+            self.animation_running = True
+            bf.destroy()
+            self.block_frame = None
+            self.logout_app()
+
+        tk.Button(inner, text="🚪 Выйти / другой аккаунт", command=_logout_from_block,
+                  bg="#5a6475", fg="white", relief="flat", font=("Segoe UI", 10),
+                  cursor="hand2", padx=20, pady=6).pack(pady=(0, 30))
 
         # запрет выхода/перезапуска пока не введён ключ
         self.root.protocol("WM_DELETE_WINDOW", lambda: None)
@@ -2155,16 +2153,12 @@ class LoginWindow:
             uid = auth.get("uid", "")
             acc = next((a for a in accs if a.get("uid") == uid), None)
             if not acc:
-                # аккаунт удалён из панели — воссоздаём локально из сохранённых данных,
-                # чтобы приложение открылось и показало экран «введите ключ»
-                acc = {
-                    "uid": uid,
-                    "email": auth.get("email", ""),
-                    "password": auth.get("password", ""),
-                    "name": auth.get("name", uid),
-                    "active": False,
-                    "expires": None
-                }
+                # аккаунт удалён — не автологиним, удаляем сохранённую авторизацию
+                try:
+                    os.remove(AUTH_FILE)
+                except Exception:
+                    pass
+                return
             self.root.destroy()
             self.on_success(acc)
         except Exception:
