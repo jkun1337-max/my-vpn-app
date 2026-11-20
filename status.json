@@ -122,14 +122,6 @@
       "password": "If7%rB3@wT6#mQ",
       "active": true,
       "expires": null
-    },
-    {
-      "email": "winter.deer@icloud.com",
-      "name": "Пользователь 6",
-      "uid": "user-06",
-      "password": "Wd2!yN9@kL5&pV",
-      "active": true,
-      "expires": null
     }
   ],
   "keys": []
