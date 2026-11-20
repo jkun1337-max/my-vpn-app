@@ -91,15 +91,6 @@
       "active": true,
       "expires": null,
       "shownPassword": true
-    },
-    {
-      "uid": "1",
-      "email": "1",
-      "password": "1",
-      "name": "1",
-      "active": true,
-      "expires": 1795185319692.9197,
-      "shownPassword": true
     }
   ],
   "keys": [
