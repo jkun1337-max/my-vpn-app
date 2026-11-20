@@ -13,13 +13,7 @@
       "since": "19:09:34"
     }
   ],
-  "commands": {
-    "all": {
-      "action": "connect",
-      "host": "45.86.20.75",
-      "port": 8000
-    }
-  },
+  "commands": {},
   "proxies": [
     {
       "host": "138.219.122.200",
