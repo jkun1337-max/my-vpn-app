@@ -7,11 +7,7 @@
       "since": "18:40:43"
     }
   ],
-  "commands": {
-    "all": {
-      "action": "disconnect"
-    }
-  },
+  "commands": {},
   "proxies": [
     {
       "host": "138.219.122.200",
