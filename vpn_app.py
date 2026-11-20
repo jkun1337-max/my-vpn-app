@@ -820,12 +820,12 @@ class SnowVPNApp:
             c.create_rectangle(0, int(h * i / bands), w, int(h * (i + 1) / bands) + 1,
                                fill=f"#{r:02x}{g:02x}{b:02x}", outline="", tags="bgbands")
 
-        # Мягкое свечение в центре (концентрические круги)
-        for i in range(8, 0, -1):
-            alpha = int(3 + (8 - i) * 1.2)
-            shade = f"#{20 + i * 2:02x}{60 + i * 4:02x}{120 + i * 6:02x}"
-            c.create_oval(int(w * 0.45) - i * 45, int(h * 0.3) - i * 45,
-                          int(w * 0.45) + i * 45, int(h * 0.3) + i * 45,
+        # Мягкое свечение в центре — тонкие полупрозрачные круги (не заливают экран)
+        for i in range(6, 0, -1):
+            # очень приглушённые тона, чтобы не было «голубого пятна»
+            shade = f"#{12 + i:02x}{22 + i * 2:02x}{44 + i * 3:02x}"
+            c.create_oval(int(w * 0.62) - i * 26, int(h * 0.42) - i * 26,
+                          int(w * 0.62) + i * 26, int(h * 0.42) + i * 26,
                           fill=shade, outline="", tags="glow")
 
         # Мерцающие звёзды
@@ -850,13 +850,16 @@ class SnowVPNApp:
                          fill="#e8f1fb", tags="snowhill2")
 
         pad = max(20, int(w * 0.03))
-        card_w = max(150, int(w * 0.26))
+        card_w = max(130, int(w * 0.21))
+        gap_c = 10
 
-        # Верхние карточки: IP / Сервер / Время работы
+        # Верхние карточки: IP / Сервер / Подписка / Время VPN
         self._draw_canvas_card(c, pad, pad, card_w, 56, "\U0001f6e1\ufe0f", "Ваш IP", "—", ACCENT, "ip")
-        self._draw_canvas_card(c, pad + card_w + 12, pad, card_w, 56, "\U0001f310", "Сервер", "Не выбрано", SUCCESS, "server")
-        self._draw_canvas_card(c, pad + 2 * (card_w + 12), pad, card_w, 56,
+        self._draw_canvas_card(c, pad + (card_w + gap_c), pad, card_w, 56, "\U0001f310", "Сервер", "Не выбрано", SUCCESS, "server")
+        self._draw_canvas_card(c, pad + 2 * (card_w + gap_c), pad, card_w, 56,
                                "\U0001f4c5", "Подписка", "♾️", WARNING, "sub")
+        self._draw_canvas_card(c, pad + 3 * (card_w + gap_c), pad, card_w, 56,
+                               "\u23f1", "Время VPN", "00:00:00", ACCENT, "uptime")
 
         # Левые карточки
         for i, (icon, text, color) in enumerate([
@@ -1479,31 +1482,34 @@ class SnowVPNApp:
             self.log(f"🔑 {msg}")
 
     def _show_key_screen(self, reason):
-        """Модальный экран блокировки — без крестика, только ввод ключа"""
-        win = tk.Toplevel(self.root)
-        win.title("SnowVPN — Доступ закрыт")
-        win.geometry("520x520")
-        win.resizable(False, False)
-        win.configure(bg="#3a3a3a")  # серый фон
-        win.transient(self.root)
-        win.grab_set()               # блокирует всё остальное
-        win.protocol("WM_DELETE_WINDOW", lambda: None)  # запрет закрытия
-        win.update_idletasks()
-        x = (win.winfo_screenwidth() // 2) - 260
-        y = (win.winfo_screenheight() // 2) - 260
-        win.geometry(f"+{x}+{y}")
+        """Полноэкранный экран блокировки ВНУТРИ приложения (не отдельное окно)"""
+        # снимаем блокировку старого экрана, если есть
+        if hasattr(self, "block_frame") and self.block_frame:
+            try:
+                self.block_frame.destroy()
+            except Exception:
+                pass
 
-        tk.Label(win, text="⛔ Доступ закрыт", bg="#3a3a3a", fg="#ffffff",
-                 font=("Segoe UI", 24, "bold")).pack(pady=(45, 10))
-        tk.Label(win, text=reason, bg="#3a3a3a", fg="#dddddd",
+        bf = tk.Frame(self.root, bg="#2f3440")
+        bf.place(x=0, y=64, relwidth=1, relheight=1)  # под верхней панелью, на весь контент
+        bf.lift()  # поверх всех вкладок
+        self.block_frame = bf
+
+        # центрируем карточку
+        inner = tk.Frame(bf, bg="#3a4152", highlightbackground="#4a5468", highlightthickness=1)
+        inner.place(relx=0.5, rely=0.45, anchor="center")
+
+        tk.Label(inner, text="⛔ Доступ закрыт", bg="#3a4152", fg="#ffffff",
+                 font=("Segoe UI", 26, "bold")).pack(pady=(40, 10), padx=60)
+        tk.Label(inner, text=reason, bg="#3a4152", fg="#e0e0e0",
                  font=("Segoe UI", 13)).pack()
-        tk.Label(win, text="\nВведите ключ для доступа:", bg="#3a3a3a", fg="#dddddd",
+        tk.Label(inner, text="\nВведите ключ для доступа:", bg="#3a4152", fg="#c8cdd6",
                  font=("Segoe UI", 12)).pack(pady=(25, 8))
-        ent = tk.Entry(win, bg="#2a2a2a", fg="white", insertbackground="white",
-                       relief="flat", font=("Consolas", 14), justify="center")
-        ent.pack(fill=tk.X, padx=60, pady=5)
+        ent = tk.Entry(inner, bg="#222833", fg="white", insertbackground="white",
+                       relief="flat", font=("Consolas", 14), justify="center", width=26)
+        ent.pack(padx=60, pady=5, ipady=6)
         ent.focus()
-        err = tk.Label(win, text="", bg="#3a3a3a", fg="#ff8a8a", font=("Segoe UI", 11))
+        err = tk.Label(inner, text="", bg="#3a4152", fg="#ff9a9a", font=("Segoe UI", 11))
         err.pack(pady=5)
 
         def apply_key():
@@ -1511,20 +1517,21 @@ class SnowVPNApp:
             if not ok:
                 err.config(text=msg)
                 return
-            # разблокируем
             self._kicking = False
             self.animation_running = True
-            win.destroy()
+            bf.destroy()
+            self.block_frame = None
+            self.root.protocol("WM_DELETE_WINDOW", lambda: (self.disconnect(), self.root.destroy()))
             self._refresh_all()
             self.log(f"🔑 {msg} — доступ восстановлен")
 
-        tk.Button(win, text="Активировать", command=apply_key, bg=SUCCESS, fg="#000",
+        tk.Button(inner, text="Активировать", command=apply_key, bg=SUCCESS, fg="#000",
                   relief="flat", font=("Segoe UI", 12, "bold"), cursor="hand2",
-                  padx=30, pady=8).pack(pady=10)
+                  padx=30, pady=8).pack(pady=(8, 35))
         ent.bind("<Return>", lambda e: apply_key())
 
-        # не даём выйти из приложения через трей/закрытие
-        self._lock_win = win
+        # запрет выхода/перезапуска пока не введён ключ
+        self.root.protocol("WM_DELETE_WINDOW", lambda: None)
 
     def _sync_proxies_from_panel(self):
         """Синхронизирует список прокси с веб-панелью (общий источник status.json)"""
@@ -1900,7 +1907,16 @@ class SnowVPNApp:
                     else:
                         txt, color = f"{int(left//86400000)} дн", SUCCESS
                 self.home_canvas.itemconfig(self.home_sub_val, text=txt, fill=color)
-        self.root.after(2000, self._tick_uptime)
+        # Время работы VPN
+        if hasattr(self, "home_uptime_val"):
+            if self.running and self.connect_start:
+                el = int(time.time() - self.connect_start)
+                h, m, s = el // 3600, (el % 3600) // 60, el % 60
+                self.home_canvas.itemconfig(self.home_uptime_val,
+                                            text=f"{h:02d}:{m:02d}:{s:02d}", fill=SUCCESS)
+            else:
+                self.home_canvas.itemconfig(self.home_uptime_val, text="00:00:00", fill=TEXT_MUTED)
+        self.root.after(1000, self._tick_uptime)
 
     def _refresh_all(self):
         # Список стран на вкладке «Серверы»
@@ -2039,35 +2055,36 @@ class LoginWindow:
         return "OK"
 
     def try_saved_login(self):
+        """Автовход по устройству. Статус проверяется уже внутри приложения."""
         if not os.path.exists(AUTH_FILE):
             return
         try:
             auth = json.load(open(AUTH_FILE, encoding="utf-8"))
-            uid = auth.get("uid", "")
             fp = auth.get("device", "")
             if fp != device_fingerprint():
                 return
             accs = self.load_accounts()
+            uid = auth.get("uid", "")
             acc = next((a for a in accs if a.get("uid") == uid), None)
             if not acc:
-                # аккаунт удалён
-                os.remove(AUTH_FILE)
-                self.alert.config(text="Аккаунт удалён — войдите заново")
-                return
-            st = self.account_status(acc)
-            if st == "DEACTIVATED":
-                self.alert.config(text="Аккаунт деактивирован")
-                return
-            if st == "EXPIRED":
-                self.alert.config(text="Подписка кончилась")
-                return
-            # всё ок — входим
+                # аккаунт удалён из панели — воссоздаём локально из сохранённых данных,
+                # чтобы приложение открылось и показало экран «введите ключ»
+                acc = {
+                    "uid": uid,
+                    "email": auth.get("email", ""),
+                    "password": auth.get("password", ""),
+                    "name": auth.get("name", uid),
+                    "active": False,
+                    "expires": None
+                }
             self.root.destroy()
             self.on_success(acc)
         except Exception:
             pass
 
     def try_login(self):
+        """Вход по логину/паролю. Истёкшая подписка НЕ блокирует вход —
+        приложение откроется и покажет экран ввода ключа."""
         email = self.email.get().strip().lower()
         password = self.password.get()
         accs = self.load_accounts()
@@ -2077,18 +2094,12 @@ class LoginWindow:
         if not user:
             self.alert.config(text="Неверный email или пароль")
             return
-        st = self.account_status(user)
-        if st == "DEACTIVATED":
-            self.alert.config(text="Аккаунт деактивирован")
-            return
-        if st == "EXPIRED":
-            self.alert.config(text="Подписка кончилась")
-            return
         if self.remember.get():
             json.dump({
                 "uid": user.get("uid", ""),
                 "email": user.get("email", ""),
                 "password": user.get("password", ""),
+                "name": user.get("name", ""),
                 "device": device_fingerprint()
             }, open(AUTH_FILE, "w", encoding="utf-8"))
         self.root.destroy()
@@ -2100,6 +2111,8 @@ def run_main_app(user):
     app = SnowVPNApp(root)
     app.my_uid = user.get("uid", "")  # ID аккаунта, под которым вошли
     app.my_name = user.get("name", "")
+    # сразу проверяем статус — если подписка кончилась/аккаунт удалён, покажем экран ключа
+    root.after(300, app._check_account_status)
     root.mainloop()
 
 
