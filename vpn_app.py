@@ -1995,9 +1995,29 @@ class LoginWindow:
 
         tk.Label(card, text="Email", bg=CARD_BG, fg=TEXT_MUTED,
                  font=("Segoe UI", 10)).pack(anchor=tk.W, padx=25)
+        # Надёжная вставка: Ctrl+V + контекстное меню по правой кнопке
+        def _paste(entry):
+            try:
+                txt = self.root.clipboard_get()
+                entry.delete(0, tk.END)
+                entry.insert(0, txt)
+            except Exception:
+                pass
+
+        def _popup(entry, event):
+            m = tk.Menu(self.root, tearoff=0, bg=CARD_BG, fg=TEXT,
+                        activebackground=ACCENT, activeforeground="#000")
+            m.add_command(label="Вставить", command=lambda: _paste(entry))
+            m.add_command(label="Копировать", command=lambda: self.root.clipboard_clear() or self.root.clipboard_append(entry.get()))
+            m.add_separator()
+            m.add_command(label="Очистить", command=lambda: entry.delete(0, tk.END))
+            m.tk_popup(event.x_root, event.y_root)
+
         self.email = tk.Entry(card, bg=BG_DARK, fg=TEXT, insertbackground=ACCENT,
                               relief="flat", font=("Segoe UI", 11))
         self.email.pack(fill=tk.X, padx=25, pady=(3, 12))
+        self.email.bind("<Button-3>", lambda e, en=self.email: _popup(en, e))
+        self.email.bind("<Control-v>", lambda e, en=self.email: (_paste(en), "break")[1])
 
         tk.Label(card, text="Пароль", bg=CARD_BG, fg=TEXT_MUTED,
                  font=("Segoe UI", 10)).pack(anchor=tk.W, padx=25)
@@ -2005,6 +2025,8 @@ class LoginWindow:
                                  relief="flat", font=("Segoe UI", 11), show="•")
         self.password.pack(fill=tk.X, padx=25, pady=(3, 12))
         self.password.bind("<Return>", lambda e: self.try_login())
+        self.password.bind("<Button-3>", lambda e, en=self.password: _popup(en, e))
+        self.password.bind("<Control-v>", lambda e, en=self.password: (_paste(en), "break")[1])
 
         btn = tk.Button(card, text="Войти", command=self.try_login,
                         bg=ACCENT, fg="#000", activebackground=ACCENT2,
