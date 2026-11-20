@@ -375,14 +375,25 @@ h1 {
 </div>
 
 <script>
-const USERS = [
-  { email: 'frost.wolf@protonmail.com', password: 'Fw9#kL2!vN8@qR', name: 'Пользователь 1' },
-  { email: 'north.star@outlook.com',    password: 'Ns3%pT7&wM4#jK', name: 'Пользователь 2' },
-  { email: 'polar.bear@gmail.com',      password: 'Pb6@mQ1!zX9%rD', name: 'Пользователь 3' },
-  { email: 'snow.owl@yandex.ru',        password: 'So4#vH8&nP2!kL', name: 'Пользователь 4' },
-  { email: 'ice.fox@mail.ru',           password: 'If7%rB3@wT6#mQ', name: 'Пользователь 5' },
-  { email: 'winter.deer@icloud.com',    password: 'Wd2!yN9@kL5&pV', name: 'Пользователь 6' }
-];
+// Аккаунты загружаются из status.json (public raw) — реальное время
+let USERS = [];
+const STATUS_URL = 'https://raw.githubusercontent.com/jkun1337-max/my-vpn-app/main/status.json';
+async function loadUsers() {
+  try {
+    const r = await fetch(STATUS_URL);
+    const d = await r.json();
+    USERS = d.accounts || [];
+  } catch (e) {
+    // fallback — если GitHub недоступен
+    USERS = [];
+  }
+}
+
+function accountStatus(a) {
+  if (!a.active) return 'DEACTIVATED';
+  if (a.expires && Date.now() > a.expires) return 'EXPIRED';
+  return 'OK';
+}
 
 const loginScreen = document.getElementById('loginScreen');
 const appScreen = document.getElementById('appScreen');
@@ -411,30 +422,46 @@ function checkSession() {
   try {
     const s = JSON.parse(saved);
     const ok = s.device === deviceFingerprint() && (Date.now()-s.time) < SESSION_HOURS*3600*1000;
-    if (ok) { showApp(s.name); return true; }
+    if (ok) {
+      // проверяем статус аккаунта (удалён/деактивирован/истёк)
+      const acc = USERS.find(u => u.uid === s.uid) || USERS.find(u => u.email === s.email);
+      if (acc) {
+        const st = accountStatus(acc);
+        if (st !== 'OK') { localStorage.removeItem('vpn_user'); showErr(st==='EXPIRED'?'Подписка кончилась':'Аккаунт деактивирован'); return false; }
+      }
+      showApp(s.name); return true;
+    }
     localStorage.removeItem('vpn_user');
   } catch (e) { localStorage.removeItem('vpn_user'); }
   return false;
 }
 
-loginForm.addEventListener('submit', (e) => {
+loginForm.addEventListener('submit', async (e) => {
   e.preventDefault();
+  await loadUsers();
   const email = document.getElementById('email').value.trim().toLowerCase();
   const password = document.getElementById('password').value;
-  const user = USERS.find(u => u.email === email && u.password === password);
+  const user = USERS.find(u => (u.email||'').toLowerCase() === email && u.password === password);
   if (user) {
+    const st = accountStatus(user);
+    if (st === 'DEACTIVATED') { showErr('Аккаунт деактивирован'); return; }
+    if (st === 'EXPIRED') { showErr('Подписка кончилась'); return; }
     loginAlert.style.display = 'none';
     localStorage.setItem('vpn_user', JSON.stringify({
-      name: user.name, email: user.email,
+      name: user.name, email: user.email, uid: user.uid,
       device: deviceFingerprint(), time: Date.now()
     }));
     showApp(user.name);
   } else {
-    loginAlert.textContent = 'Неверный email или пароль';
-    loginAlert.style.display = 'block';
-    card.classList.remove('shake'); void card.offsetWidth; card.classList.add('shake');
+    showErr('Неверный email или пароль');
   }
 });
+
+function showErr(t) {
+  loginAlert.textContent = t;
+  loginAlert.style.display = 'block';
+  card.classList.remove('shake'); void card.offsetWidth; card.classList.add('shake');
+}
 
 function showApp(name) {
   loginScreen.classList.add('hidden');
@@ -472,7 +499,7 @@ function downloadApp() {
   }
 })();
 
-checkSession();
+loadUsers().then(checkSession);
 </script>
 </body>
 </html>
