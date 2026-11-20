@@ -114,14 +114,6 @@
       "password": "So4#vH8&nP2!kL",
       "active": true,
       "expires": null
-    },
-    {
-      "email": "ice.fox@mail.ru",
-      "name": "Пользователь 5",
-      "uid": "user-05",
-      "password": "If7%rB3@wT6#mQ",
-      "active": true,
-      "expires": null
     }
   ],
   "keys": []
