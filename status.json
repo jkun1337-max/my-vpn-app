@@ -84,6 +84,15 @@
       "active": true,
       "expires": 1795187023692,
       "shownPassword": true
+    },
+    {
+      "uid": "adm@in",
+      "email": "adm@in",
+      "password": "adm@in",
+      "name": "adm@in",
+      "active": true,
+      "expires": null,
+      "shownPassword": true
     }
   ],
   "keys": [
