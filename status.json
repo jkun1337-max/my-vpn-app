@@ -95,5 +95,14 @@
       "shownPassword": true
     }
   ],
-  "keys": []
+  "keys": [
+    {
+      "key": "SNOW-Z-7-5-B",
+      "duration": 60480,
+      "note": "1",
+      "activatedBy": null,
+      "activatedAt": null,
+      "expiresAt": null
+    }
+  ]
 }
