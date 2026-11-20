@@ -95,5 +95,14 @@
       "shownPassword": true
     }
   ],
-  "keys": []
+  "keys": [
+    {
+      "key": "SNOW-6-4-8-8",
+      "duration": 60480,
+      "note": "",
+      "activatedBy": null,
+      "activatedAt": null,
+      "expiresAt": null
+    }
+  ]
 }
