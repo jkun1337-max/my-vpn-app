@@ -85,14 +85,5 @@
       "expires": 1795186343324.4617
     }
   ],
-  "keys": [
-    {
-      "key": "SNOW-S-U-7-2",
-      "duration": 60480,
-      "note": "",
-      "activatedBy": "gandon@chik",
-      "activatedAt": 1795186282844,
-      "expiresAt": 1795186343324.4617
-    }
-  ]
+  "keys": []
 }
