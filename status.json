@@ -92,26 +92,10 @@
       "expires": null
     },
     {
-      "email": "north.star@outlook.com",
-      "name": "Пользователь 2",
-      "uid": "user-02",
-      "password": "Ns3%pT7&wM4#jK",
-      "active": true,
-      "expires": null
-    },
-    {
       "email": "polar.bear@gmail.com",
       "name": "Пользователь 3",
       "uid": "user-03",
       "password": "Pb6@mQ1!zX9%rD",
-      "active": true,
-      "expires": null
-    },
-    {
-      "email": "snow.owl@yandex.ru",
-      "name": "Пользователь 4",
-      "uid": "user-04",
-      "password": "So4#vH8&nP2!kL",
       "active": true,
       "expires": null
     }
