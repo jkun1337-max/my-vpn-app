@@ -115,7 +115,7 @@
       "email": "gan@don",
       "password": "gan@don",
       "name": "gan@don",
-      "active": false,
+      "active": true,
       "expires": null,
       "shownPassword": true
     }
