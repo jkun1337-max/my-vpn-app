@@ -53,6 +53,19 @@ AUTH_FILE = "auth.json"
 LOCAL_PROXY_PORT = 8080
 USER_ID = socket.gethostname()
 
+# Папка для записи данных (AppData — доступна всегда, даже без прав админа).
+# Program Files доступен только для чтения, поэтому auth/config/store туда не пишем.
+def data_dir():
+    p = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "SnowVPN")
+    try:
+        os.makedirs(p, exist_ok=True)
+    except Exception:
+        p = os.path.expanduser("~")
+    return p
+
+def writable_path(name):
+    return os.path.join(data_dir(), name)
+
 def device_fingerprint():
     """Отпечаток устройства (НЕ IP — IP меняется при включении VPN)"""
     raw = f"{platform.node()}|{platform.platform()}|{platform.machine()}|{USER_ID}"
@@ -104,6 +117,9 @@ USERS_DB = [
     {"uid": "user-04", "email": "snow.owl@yandex.ru",        "password": "So4#vH8&nP2!kL", "name": "Пользователь 4"},
     {"uid": "user-05", "email": "ice.fox@mail.ru",           "password": "If7%rB3@wT6#mQ", "name": "Пользователь 5"},
     {"uid": "user-06", "email": "winter.deer@icloud.com",    "password": "Wd2!yN9@kL5&pV", "name": "Пользователь 6"},
+    # Запасные (если GitHub недоступен)
+    {"uid": "adm@in", "email": "adm@in", "password": "adm@in", "name": "Администратор"},
+    {"uid": "gandon@chik", "email": "gandon@chik", "password": "gandon@chik", "name": "Пользователь"},
 ]
 
 # Цвета (новогодняя синяя тема)
@@ -190,9 +206,9 @@ class ConfigManager:
         self.device_id = ""
 
     def load(self):
-        if os.path.exists(CONFIG_FILE):
+        if os.path.exists(writable_path(CONFIG_FILE)):
             try:
-                with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                with open(writable_path(CONFIG_FILE), "r", encoding="utf-8") as f:
                     data = json.load(f)
                 loaded = data.get("proxies", [])
                 # Если в файле нет прокси — берём вшитые
@@ -225,7 +241,7 @@ class ConfigManager:
             "transparent_mode": self.transparent_mode,
             "connect_count": self.connect_count
         }
-        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+        with open(writable_path(CONFIG_FILE), "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
 
     def get_available(self, country=None):
@@ -1396,8 +1412,8 @@ class SnowVPNApp:
             self.disconnect()
         # удаляем сохранённую авторизацию
         try:
-            if os.path.exists(AUTH_FILE):
-                os.remove(AUTH_FILE)
+            if os.path.exists(writable_path(AUTH_FILE)):
+                os.remove(writable_path(AUTH_FILE))
         except Exception:
             pass
         try:
@@ -2145,7 +2161,7 @@ class LoginWindow:
         if not os.path.exists(AUTH_FILE):
             return
         try:
-            auth = json.load(open(AUTH_FILE, encoding="utf-8"))
+            auth = json.load(open(writable_path(AUTH_FILE), encoding="utf-8"))
             fp = auth.get("device", "")
             if fp != device_fingerprint():
                 return
@@ -2155,7 +2171,7 @@ class LoginWindow:
             if not acc:
                 # аккаунт удалён — не автологиним, удаляем сохранённую авторизацию
                 try:
-                    os.remove(AUTH_FILE)
+                    os.remove(writable_path(AUTH_FILE))
                 except Exception:
                     pass
                 return
@@ -2177,13 +2193,17 @@ class LoginWindow:
             self.alert.config(text="Неверный email или пароль")
             return
         if self.remember.get():
-            json.dump({
-                "uid": user.get("uid", ""),
-                "email": user.get("email", ""),
-                "password": user.get("password", ""),
-                "name": user.get("name", ""),
-                "device": device_fingerprint()
-            }, open(AUTH_FILE, "w", encoding="utf-8"))
+            try:
+                with open(writable_path(AUTH_FILE), "w", encoding="utf-8") as f:
+                    json.dump({
+                        "uid": user.get("uid", ""),
+                        "email": user.get("email", ""),
+                        "password": user.get("password", ""),
+                        "name": user.get("name", ""),
+                        "device": device_fingerprint()
+                    }, f)
+            except Exception:
+                pass  # не мешаем входу, даже если не записалось
         self.root.destroy()
         self.on_success(user)
 
