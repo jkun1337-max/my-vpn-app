@@ -102,6 +102,15 @@
       "active": true,
       "expires": null,
       "shownPassword": true
+    },
+    {
+      "uid": "gan@don",
+      "email": "gan@don",
+      "password": "gan@don",
+      "name": "gan@don",
+      "active": true,
+      "expires": null,
+      "shownPassword": true
     }
   ],
   "keys": [
