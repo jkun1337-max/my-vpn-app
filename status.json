@@ -76,5 +76,14 @@
     }
   ],
   "accounts": [],
-  "keys": []
+  "keys": [
+    {
+      "key": "SNOW-S-U-7-2",
+      "duration": 60480,
+      "note": "",
+      "activatedBy": null,
+      "activatedAt": null,
+      "expiresAt": null
+    }
+  ]
 }
