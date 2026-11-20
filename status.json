@@ -1,6 +1,12 @@
 {
   "connections": [
     {
+      "user": "deadgod",
+      "proxy": "45.86.20.75:8000",
+      "country": "Нигерия",
+      "since": "19:15:31"
+    },
+    {
       "user": "имя",
       "proxy": "45.86.20.252:8000",
       "country": "Нигерия",
