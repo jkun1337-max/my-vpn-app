@@ -609,6 +609,7 @@ class SnowVPNApp:
         self._refresh_all()
         self._start_status_refresh()
         self._tick_uptime()
+        self._twinkle()
         self._setup_tray()
 
         if not GITHUB_TOKEN:
@@ -809,29 +810,44 @@ class SnowVPNApp:
         self._home_size = (w, h)
         c.delete("all")
 
-        # Чёрный фон (без картинки)
-        c.create_rectangle(0, 0, w, h, fill="#080c14", tags="bgfill")
+        # Градиентный ночной фон (полосы от тёмного к синему)
+        bands = 40
+        for i in range(bands):
+            t = i / bands
+            r = int(6 + 8 * t)
+            g = int(10 + 16 * t)
+            b = int(24 + 34 * t)
+            c.create_rectangle(0, int(h * i / bands), w, int(h * (i + 1) / bands) + 1,
+                               fill=f"#{r:02x}{g:02x}{b:02x}", outline="", tags="bgbands")
 
-        # Белые точки (статичные, без анимации)
+        # Мягкое свечение в центре (концентрические круги)
+        for i in range(8, 0, -1):
+            alpha = int(3 + (8 - i) * 1.2)
+            shade = f"#{20 + i * 2:02x}{60 + i * 4:02x}{120 + i * 6:02x}"
+            c.create_oval(int(w * 0.45) - i * 45, int(h * 0.3) - i * 45,
+                          int(w * 0.45) + i * 45, int(h * 0.3) + i * 45,
+                          fill=shade, outline="", tags="glow")
+
+        # Мерцающие звёзды
         random.seed(7)
-        for _ in range(70):
+        self.stars = []
+        for _ in range(90):
             x = random.randint(0, w)
-            y = random.randint(0, int(h * 0.8))
-            rr = random.choice([1, 1, 1, 2])
-            br = random.choice(["#2a3446", "#3a4a63", "#50617d"])
-            c.create_oval(x, y, x + rr, y + rr, fill=br, tags="dots")
+            y = random.randint(0, int(h * 0.7))
+            rr = random.choice([1, 1, 1, 2, 2])
+            br = random.choice(["#3a4a63", "#5a6c8c", "#8fa8c8", "#ffffff"])
+            st = c.create_oval(x, y, x + rr, y + rr, fill=br, tags="star")
+            self.stars.append((st, random.uniform(0, 6)))
 
-        # Сугроб внизу
+        # Сугроб внизу (два слоя + блики)
         snow_y = int(h * 0.82)
-        c.create_polygon(
-            0, snow_y + 30,
-            int(w * 0.2), snow_y - 10,
-            int(w * 0.45), snow_y + 20,
-            int(w * 0.7), snow_y - 15,
-            w, snow_y + 25,
-            w, h, 0, h,
-            fill="#dbe6f2", tags="snowhill"
-        )
+        c.create_polygon(0, snow_y + 30, int(w*0.2), snow_y - 12,
+                         int(w*0.45), snow_y + 18, int(w*0.7), snow_y - 18,
+                         w, snow_y + 22, w, h, 0, h,
+                         fill="#c3d4ea", tags="snowhill1")
+        c.create_polygon(0, snow_y + 55, int(w*0.3), snow_y + 30,
+                         int(w*0.6), snow_y + 52, w, snow_y + 35, w, h, 0, h,
+                         fill="#e8f1fb", tags="snowhill2")
 
         pad = max(20, int(w * 0.03))
         card_w = max(150, int(w * 0.26))
@@ -855,37 +871,30 @@ class SnowVPNApp:
             c.create_text(pad + 55, y + 28, text=text, fill=TEXT,
                           font=("Segoe UI", 10, "bold"), anchor="w")
 
-        # Переключатель OFF / ON (закруглённый) — центр
+        # Переключатель OFF / ON — красивая «таблетка» со свечением
         cx, cy = int(w * 0.68), int(h * 0.45)
-        tw, th = 220, 84
-        self.toggle_bg = c.create_rounded_rectangle if hasattr(c, "create_rounded_rectangle") else None
-
-        def round_rect(x1, y1, x2, y2, r=40, **kw):
-            pts = []
-            for xx, yy, dir in [(x2, y2, 0), (x1, y2, 1), (x1, y1, 2), (x2, y1, 3)]:
-                pass
-            # простой скруглённый прямоугольник через полигон+дуги
-            return c.create_oval(x1, y1, x1 + 2 * r, y1 + 2 * r, **kw)
-
-        # рисуем «таблетку»
-        self.switch_track = c.create_oval(cx - tw // 2, cy - th // 2,
-                                          cx - tw // 2 + th, cy + th // 2,
-                                          fill="#2a3446", outline="")
-        c.create_oval(cx + tw // 2 - th, cy - th // 2,
-                      cx + tw // 2, cy + th // 2, fill="#2a3446", outline="")
-        c.create_rectangle(cx - tw // 2 + th // 2, cy - th // 2,
-                           cx + tw // 2 - th // 2, cy + th // 2, fill="#2a3446", outline="")
+        tw, th = 240, 92
         self.switch_off_x = cx - tw // 2 + th // 2
         self.switch_on_x = cx + tw // 2 - th // 2
         self.switch_off_y = cy
         self.switch_on_y = cy
-        self.switch_knob = c.create_oval(self.switch_off_x - 34, cy - 34,
-                                         self.switch_off_x + 34, cy + 34,
-                                         fill="#8899b0", outline="")
+
+        self.switch_glow = c.create_oval(cx - tw//2 - 12, cy - th//2 - 12,
+                                         cx + tw//2 + 12, cy + th//2 + 12,
+                                         fill="#16233d", outline="")
+        c.create_rectangle(cx - tw//2 + th//2, cy - th//2,
+                           cx + tw//2 - th//2, cy + th//2, fill="#243349", outline="")
+        self.switch_track = c.create_oval(cx - tw//2, cy - th//2,
+                                          cx - tw//2 + th, cy + th//2,
+                                          fill="#243349", outline="")
+        c.create_oval(cx + tw//2 - th, cy - th//2,
+                      cx + tw//2, cy + th//2, fill="#243349", outline="")
+        self.switch_knob = c.create_oval(self.switch_off_x - 35, cy - 35,
+                                          self.switch_off_x + 35, cy + 35,
+                                          fill="#9fb3cc", outline="#cfe0f5", width=2)
         self.switch_label = c.create_text(cx, cy, text="OFF", fill="#cbd5e1",
-                                          font=("Segoe UI", 18, "bold"))
-        # клик по всей таблетке
-        for it in (self.switch_track, self.switch_knob, self.switch_label):
+                                           font=("Segoe UI", 19, "bold"))
+        for it in (self.switch_track, self.switch_knob, self.switch_label, self.switch_glow):
             c.tag_bind(it, "<Button-1>", lambda e: self.toggle_connection())
             c.tag_bind(it, "<Enter>", lambda e: c.config(cursor="hand2"))
             c.tag_bind(it, "<Leave>", lambda e: c.config(cursor=""))
@@ -1310,26 +1319,37 @@ class SnowVPNApp:
                 c.coords(flake["id"], flake["x"], flake["y"])
         self.root.after(120, self._animate_snow)
 
+    def _twinkle(self):
+        """Мерцание звёзд"""
+        if getattr(self, "stars", None) and hasattr(self, "home_canvas"):
+            for st, phase in self.stars[:40]:
+                try:
+                    b = 0.55 + 0.45 * abs(math.sin(time.time() * 1.5 + phase))
+                    v = int(60 + b * 180)
+                    g = min(255, v + 20)
+                    self.home_canvas.itemconfig(st, fill=f"#{v:02x}{g:02x}ff")
+                except Exception:
+                    pass
+        self.root.after(300, self._twinkle)
+
     def _start_pulse(self):
         self._animate_pulse()
 
     def _animate_pulse(self):
+        """Пульсация свечения переключателя при включённом VPN"""
         if not self.animation_running:
             return
-        if not hasattr(self, "power_glow"):
-            self.root.after(100, self._animate_pulse)
+        if not hasattr(self, "switch_glow"):
+            self.root.after(150, self._animate_pulse)
             return
         if self.running:
             self.pulse_state = (self.pulse_state + 0.06) % (2 * math.pi)
-            intensity = int(60 + 60 * abs(math.sin(self.pulse_state)))
-            color = f"#{intensity:02x}ff{intensity:02x}"
-            self.home_canvas.itemconfig(self.power_glow, fill=color)
-            self.home_canvas.itemconfig(self.power_ring, outline=SUCCESS2, width=5)
-            self.home_canvas.itemconfig(self.power_icon, fill="#ffffff")
+            b = 0.5 + 0.5 * abs(math.sin(self.pulse_state))
+            g = int(40 + b * 50)
+            self.home_canvas.itemconfig(self.switch_glow, fill=f"#0a{g:02x}28")
+            self.home_canvas.itemconfig(self.switch_knob, fill=SUCCESS, outline="#bbf7d0")
         else:
-            self.home_canvas.itemconfig(self.power_glow, fill="#142033")
-            self.home_canvas.itemconfig(self.power_ring, outline=ACCENT, width=4)
-            self.home_canvas.itemconfig(self.power_icon, fill=TEXT)
+            self.home_canvas.itemconfig(self.switch_glow, fill="#16233d")
         self.root.after(150, self._animate_pulse)
 
     # --- Автообновление общего статуса ---
@@ -1361,11 +1381,12 @@ class SnowVPNApp:
                 self.tray_icon.stop()
             except Exception:
                 pass
-        self.root.destroy()
-        # перезапускаем с окном логина
-        login_root = tk.Tk()
-        LoginWindow(login_root, run_main_app)
-        login_root.mainloop()
+        # чиcтый перезапуск приложения (новый процесс = окно логина)
+        try:
+            python = sys.executable
+            os.execv(python, [python] + sys.argv)
+        except Exception:
+            self.root.destroy()
 
     def _check_account_status(self):
         """Если аккаунт удалён/деактивирован/истёк — закрываем приложение"""
@@ -1914,7 +1935,6 @@ class SnowVPNApp:
                     self.switch_off_x - 34, self.switch_off_y - 34,
                     self.switch_off_x + 34, self.switch_off_y + 34
                 )
-            self.home_canvas.itemconfig(self.home_sub_val, text="♾️", fill=WARNING)
 
         # Статистика
         self.stat_labels["proxy_count"].config(text=str(len(self.config.proxies)))
