@@ -123,15 +123,6 @@
       "password": "Wd2!yN9@kL5&pV",
       "active": true,
       "expires": null
-    },
-    {
-      "uid": "01@011",
-      "email": "01@01",
-      "password": "01@01",
-      "name": "01@01",
-      "active": true,
-      "expires": 1795260597607,
-      "shownPassword": true
     }
   ]
 }
