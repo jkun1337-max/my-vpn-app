@@ -624,6 +624,7 @@ class SnowVPNApp:
         self._start_status_refresh()
         self._tick_uptime()
         self._twinkle()
+        self._animate_snow()
         self._setup_tray()
 
         if not GITHUB_TOKEN:
@@ -864,7 +865,7 @@ class SnowVPNApp:
                          fill="#e8f1fb", tags="snowhill2")
 
         pad = max(20, int(w * 0.03))
-        card_w = max(130, int(w * 0.21))
+        card_w = max(155, int(w * 0.235))
         gap_c = 10
 
         # Верхние карточки: IP / Сервер / Подписка / Время VPN
@@ -885,7 +886,7 @@ class SnowVPNApp:
             c.create_rectangle(pad, y, pad + card_w, y + 56, fill="#111a2b", outline="#22304d")
             c.create_text(pad + 18, y + 28, text=icon, fill=color,
                           font=("Segoe UI Emoji", 19), anchor="w")
-            c.create_text(pad + 55, y + 28, text=text, fill=TEXT,
+            c.create_text(pad + 52, y + 28, text=text, fill=TEXT,
                           font=("Segoe UI", 10, "bold"), anchor="w")
 
         # Переключатель OFF / ON — красивая «таблетка» со свечением
@@ -935,7 +936,10 @@ class SnowVPNApp:
         else:
             self.country_combo.set(countries[0])
         self.country_combo.bind("<<ComboboxSelected>>", self.on_country_selected)
-        c.create_window(cx, cy + th // 2 + 100, window=self.country_combo, anchor="center")
+        c.create_window(cx, cy + th // 2 + 112, window=self.country_combo, anchor="center")
+
+        # Падающий снег (поверх всего, но не ловит клики — это просто текст на canvas)
+        self._create_snowflakes(w, h)
 
         # Нижние кнопки — Белый список и Выйти
         bw2 = 170
@@ -951,11 +955,11 @@ class SnowVPNApp:
 
     def _draw_canvas_card(self, c, x, y, w, h, icon, title, value, color, tag):
         c.create_rectangle(x, y, x + w, y + h, fill="#152038", outline="#22304d")
-        c.create_text(x + 22, y + h // 2, text=icon, fill=color,
-                      font=("Segoe UI Emoji", 20), anchor="w")
-        c.create_text(x + 55, y + 18, text=title, fill=TEXT_MUTED,
+        c.create_text(x + 18, y + h // 2, text=icon, fill=color,
+                      font=("Segoe UI Emoji", 18), anchor="w")
+        c.create_text(x + 48, y + 18, text=title, fill=TEXT_MUTED,
                       font=("Segoe UI", 9), anchor="w")
-        val = c.create_text(x + 55, y + 40, text=value, fill=color,
+        val = c.create_text(x + 48, y + 39, text=value, fill=color,
                             font=("Segoe UI", 11, "bold"), anchor="w")
         setattr(self, f"home_{tag}_val", val)
 
@@ -1114,6 +1118,8 @@ class SnowVPNApp:
         self.key_entry = tk.Entry(row, bg=BG_DARK, fg=TEXT, insertbackground=ACCENT,
                                   relief="flat", font=("Consolas", 12))
         self.key_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=6)
+        self.key_entry.bind("<Control-v>", lambda e: self._paste_into(self.key_entry))
+        self.key_entry.bind("<Button-3>", lambda e: self._entry_popup(self.key_entry, e))
         tk.Button(row, text="Активировать", command=self.activate_key_from_settings,
                   bg=SUCCESS, fg="#000", relief="flat", font=("Segoe UI", 10, "bold"),
                   cursor="hand2", padx=16).pack(side=tk.LEFT, padx=(8, 0))
@@ -1306,11 +1312,11 @@ class SnowVPNApp:
         if not self.snow_canvases:
             return
         c = self.snow_canvases[0]
-        for _ in range(16):
+        for _ in range(12):
             x = random.randint(0, w)
             y = random.randint(0, h)
-            size = random.randint(8, 13)
-            speed = random.uniform(0.8, 1.8)
+            size = random.randint(8, 12)
+            speed = random.uniform(0.5, 1.2)
             flake = c.create_text(x, y, text="❄", font=("Segoe UI", size),
                                   fill="#cbd5e1", tags="snow")
             self.snowflakes.append({"id": flake, "x": x, "y": y, "speed": speed})
@@ -1501,6 +1507,20 @@ class SnowVPNApp:
         st.save()
         return True, "Ключ активирован"
 
+    def _paste_into(self, entry):
+        try:
+            txt = self.root.clipboard_get()
+            entry.delete(0, tk.END); entry.insert(0, txt)
+        except Exception:
+            pass
+
+    def _entry_popup(self, entry, event):
+        m = tk.Menu(self.root, tearoff=0, bg=CARD_BG, fg=TEXT,
+                    activebackground=ACCENT, activeforeground="#000")
+        m.add_command(label="Вставить", command=lambda: self._paste_into(entry))
+        m.add_command(label="Очистить", command=lambda: entry.delete(0, tk.END))
+        m.tk_popup(event.x_root, event.y_root)
+
     def activate_key_from_settings(self):
         ok, msg = self._activate_key(self.key_entry.get())
         self.key_result.config(text=msg, fg=SUCCESS if ok else ERROR)
@@ -1538,6 +1558,23 @@ class SnowVPNApp:
                        relief="flat", font=("Consolas", 14), justify="center", width=26)
         ent.pack(padx=60, pady=5, ipady=6)
         ent.focus()
+
+        def _paste_key():
+            try:
+                txt = self.root.clipboard_get().strip()
+                ent.delete(0, tk.END); ent.insert(0, txt)
+            except Exception:
+                pass
+
+        def _key_popup(event):
+            m = tk.Menu(self.root, tearoff=0, bg="#3a4152", fg="white",
+                        activebackground=ACCENT, activeforeground="#000")
+            m.add_command(label="Вставить", command=_paste_key)
+            m.add_command(label="Очистить", command=lambda: ent.delete(0, tk.END))
+            m.tk_popup(event.x_root, event.y_root)
+
+        ent.bind("<Control-v>", lambda e: (_paste_key(), "break")[1])
+        ent.bind("<Button-3>", _key_popup)
         err = tk.Label(inner, text="", bg="#3a4152", fg="#ff9a9a", font=("Segoe UI", 11))
         err.pack(pady=5)
 
