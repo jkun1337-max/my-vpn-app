@@ -108,8 +108,8 @@
       "email": "gan@don",
       "password": "gan@don",
       "name": "gan@don",
-      "active": false,
-      "expires": 1795189123779,
+      "active": true,
+      "expires": null,
       "shownPassword": true
     }
   ],
@@ -118,8 +118,8 @@
       "key": "SNOW-P-X-3-R",
       "duration": null,
       "note": "",
-      "activatedBy": null,
-      "activatedAt": null,
+      "activatedBy": "gan@don",
+      "activatedAt": 1795189155714,
       "expiresAt": null
     }
   ]
