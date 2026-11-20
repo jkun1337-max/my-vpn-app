@@ -263,6 +263,7 @@ class SharedStatus:
         self.commands = {}     # {"имя": {"action", "host", "port"}}
         self.proxies = []      # список прокси из веб-панели
         self.accounts = []     # список аккаунтов из веб-панели
+        self.keys = []         # список ключей из веб-панели
         self._sha = None       # кэш SHA файла status.json
         self._save_lock = threading.Lock()
 
@@ -282,6 +283,7 @@ class SharedStatus:
                 self.commands = content.get("commands", {})
                 self.proxies = content.get("proxies", [])
                 self.accounts = content.get("accounts", [])
+                self.keys = content.get("keys", [])
         except Exception:
             pass
 
@@ -309,7 +311,8 @@ class SharedStatus:
                 payload = json.dumps({"connections": self.connections,
                                       "commands": self.commands,
                                       "proxies": self.proxies,
-                                      "accounts": self.accounts},
+                                      "accounts": self.accounts,
+                                      "keys": self.keys},
                                      ensure_ascii=False, indent=2).encode("utf-8")
                 body = {
                     "message": "SnowVPN: update",
@@ -837,7 +840,7 @@ class SnowVPNApp:
         self._draw_canvas_card(c, pad, pad, card_w, 56, "\U0001f6e1\ufe0f", "Ваш IP", "—", ACCENT, "ip")
         self._draw_canvas_card(c, pad + card_w + 12, pad, card_w, 56, "\U0001f310", "Сервер", "Не выбрано", SUCCESS, "server")
         self._draw_canvas_card(c, pad + 2 * (card_w + 12), pad, card_w, 56,
-                               "\u23f1", "Время работы", "00:00:00", WARNING, "uptime")
+                               "\U0001f4c5", "Подписка", "♾️", WARNING, "sub")
 
         # Левые карточки
         for i, (icon, text, color) in enumerate([
@@ -908,12 +911,15 @@ class SnowVPNApp:
         self.country_combo.bind("<<ComboboxSelected>>", self.on_country_selected)
         c.create_window(cx, cy + th // 2 + 100, window=self.country_combo, anchor="center")
 
-        # Нижняя кнопка — только Белый список
-        bw2 = 220
-        startx = (w - bw2) // 2
+        # Нижние кнопки — Белый список и Выйти
+        bw2 = 170
+        gap = 10
+        startx = (w - (bw2 * 2 + gap)) // 2
         by = h - 58
         self._draw_canvas_button(c, startx, by, bw2, 44, "\U0001f4cb  Белый список",
                                  lambda: self.switch_tab("whitelist", "Белый список"))
+        self._draw_canvas_button(c, startx + bw2 + gap, by, bw2, 44, "🚪  Выйти",
+                                 self.logout_app)
 
         self._refresh_all()
 
@@ -1071,6 +1077,23 @@ class SnowVPNApp:
 
         self.transparent_var = tk.BooleanVar(value=self.config.transparent_mode)
         self._make_check(settings_frame, "🔍  Прозрачный режим", self.transparent_var, self.toggle_transparent)
+
+        # Ввод ключа
+        key_frame = tk.Frame(frame, bg=CARD_BG, highlightbackground=BORDER, highlightthickness=1)
+        key_frame.pack(fill=tk.X, padx=25, pady=15)
+        tk.Label(key_frame, text="🔑  Ввод ключа (продлить подписку)", bg=CARD_BG,
+                 fg=ACCENT, font=("Segoe UI", 12, "bold")).pack(anchor=tk.W, padx=18, pady=(15, 8))
+        row = tk.Frame(key_frame, bg=CARD_BG)
+        row.pack(fill=tk.X, padx=18, pady=(0, 15))
+        self.key_entry = tk.Entry(row, bg=BG_DARK, fg=TEXT, insertbackground=ACCENT,
+                                  relief="flat", font=("Consolas", 12))
+        self.key_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=6)
+        tk.Button(row, text="Активировать", command=self.activate_key_from_settings,
+                  bg=SUCCESS, fg="#000", relief="flat", font=("Segoe UI", 10, "bold"),
+                  cursor="hand2", padx=16).pack(side=tk.LEFT, padx=(8, 0))
+        self.key_result = tk.Label(key_frame, text="", bg=CARD_BG, fg=SUCCESS,
+                                   font=("Segoe UI", 10))
+        self.key_result.pack(anchor=tk.W, padx=18, pady=(0, 12))
 
         tk.Label(frame, text=f"Локальный прокси: 127.0.0.1:{LOCAL_PROXY_PORT}\n"
                              f"Текущая версия: {APP_VERSION}\n"
@@ -1324,6 +1347,26 @@ class SnowVPNApp:
                     pass
         threading.Thread(target=loop, daemon=True).start()
 
+    def logout_app(self):
+        """Выход из аккаунта — показываем окно логина заново"""
+        if self.running:
+            self.disconnect()
+        if os.path.exists(AUTH_FILE):
+            try:
+                os.remove(AUTH_FILE)
+            except Exception:
+                pass
+        if self.tray_icon:
+            try:
+                self.tray_icon.stop()
+            except Exception:
+                pass
+        self.root.destroy()
+        # перезапускаем с окном логина
+        login_root = tk.Tk()
+        LoginWindow(login_root, run_main_app)
+        login_root.mainloop()
+
     def _check_account_status(self):
         """Если аккаунт удалён/деактивирован/истёк — закрываем приложение"""
         uid = getattr(self, "my_uid", "")
@@ -1345,27 +1388,122 @@ class SnowVPNApp:
             return
 
     def _account_kicked(self, reason):
-        """Показывает сообщение и закрывает приложение"""
+        """Выключает VPN и показывает полноэкранный экран «введите ключ» (нельзя обойти)"""
         if getattr(self, "_kicking", False):
             return
         self._kicking = True
+        # ВЫКЛЮЧАЕМ VPN сразу, ещё до показа окна
         if self.running:
             try:
-                self.disconnect()
+                self._set_system_proxy(False)
+                self.shared.remove()
+                if self.server:
+                    self.server.shutdown()
+                    self.server.server_close()
+                self.running = False
+                self.server = None
+                self.connected_proxy = None
             except Exception:
                 pass
-        messagebox.showerror("SnowVPN", f"{reason}\n\nОбратись к администратору.")
-        if self.tray_icon:
+        self.animation_running = False
+        self._show_key_screen(reason)
+
+    def _activate_key(self, key):
+        """Активирует ключ. Возвращает (ok, сообщение)"""
+        key = key.strip().upper()
+        st = self.shared
+        st.load()
+        k = next((x for x in st.keys if x.get("key", "").upper() == key), None)
+        if not k or k.get("activatedBy"):
+            return False, "Неверный или уже использованный ключ"
+        dur = k.get("duration")
+        now_ms = time.time() * 1000
+        exp = now_ms + dur if dur else None
+        k["activatedBy"] = getattr(self, "my_name", DISPLAY_NAME)
+        k["activatedAt"] = int(now_ms)
+        k["expiresAt"] = exp
+        st.keys = [x for x in st.keys if x.get("key") != k.get("key")]
+        st.keys.append(k)
+        uid = getattr(self, "my_uid", "")
+        found = False
+        for a in st.accounts:
+            if a.get("uid") == uid:
+                a["active"] = True
+                a["expires"] = exp
+                found = True
+        if not found:
+            auth = {}
             try:
-                self.tray_icon.stop()
+                auth = json.load(open(AUTH_FILE, encoding="utf-8"))
             except Exception:
                 pass
-        if os.path.exists(AUTH_FILE):
-            try:
-                os.remove(AUTH_FILE)
-            except Exception:
-                pass
-        self.root.destroy()
+            st.accounts.append({
+                "uid": uid,
+                "email": auth.get("email", ""),
+                "password": auth.get("password", ""),
+                "name": getattr(self, "my_name", uid),
+                "active": True,
+                "expires": exp
+            })
+        st.save()
+        return True, "Ключ активирован"
+
+    def activate_key_from_settings(self):
+        ok, msg = self._activate_key(self.key_entry.get())
+        self.key_result.config(text=msg, fg=SUCCESS if ok else ERROR)
+        self.key_entry.delete(0, tk.END)
+        if ok:
+            self._kicking = False
+            self.animation_running = True
+            self.log(f"🔑 {msg}")
+
+    def _show_key_screen(self, reason):
+        """Модальный экран блокировки — без крестика, только ввод ключа"""
+        win = tk.Toplevel(self.root)
+        win.title("SnowVPN — Доступ закрыт")
+        win.geometry("520x520")
+        win.resizable(False, False)
+        win.configure(bg="#3a3a3a")  # серый фон
+        win.transient(self.root)
+        win.grab_set()               # блокирует всё остальное
+        win.protocol("WM_DELETE_WINDOW", lambda: None)  # запрет закрытия
+        win.update_idletasks()
+        x = (win.winfo_screenwidth() // 2) - 260
+        y = (win.winfo_screenheight() // 2) - 260
+        win.geometry(f"+{x}+{y}")
+
+        tk.Label(win, text="⛔ Доступ закрыт", bg="#3a3a3a", fg="#ffffff",
+                 font=("Segoe UI", 24, "bold")).pack(pady=(45, 10))
+        tk.Label(win, text=reason, bg="#3a3a3a", fg="#dddddd",
+                 font=("Segoe UI", 13)).pack()
+        tk.Label(win, text="\nВведите ключ для доступа:", bg="#3a3a3a", fg="#dddddd",
+                 font=("Segoe UI", 12)).pack(pady=(25, 8))
+        ent = tk.Entry(win, bg="#2a2a2a", fg="white", insertbackground="white",
+                       relief="flat", font=("Consolas", 14), justify="center")
+        ent.pack(fill=tk.X, padx=60, pady=5)
+        ent.focus()
+        err = tk.Label(win, text="", bg="#3a3a3a", fg="#ff8a8a", font=("Segoe UI", 11))
+        err.pack(pady=5)
+
+        def apply_key():
+            ok, msg = self._activate_key(ent.get())
+            if not ok:
+                err.config(text=msg)
+                return
+            # разблокируем
+            self._kicking = False
+            self.animation_running = True
+            win.destroy()
+            self._refresh_all()
+            self.log(f"🔑 {msg} — доступ восстановлен")
+
+        tk.Button(win, text="Активировать", command=apply_key, bg=SUCCESS, fg="#000",
+                  relief="flat", font=("Segoe UI", 12, "bold"), cursor="hand2",
+                  padx=30, pady=8).pack(pady=10)
+        ent.bind("<Return>", lambda e: apply_key())
+
+        # не даём выйти из приложения через трей/закрытие
+        self._lock_win = win
 
     def _sync_proxies_from_panel(self):
         """Синхронизирует список прокси с веб-панелью (общий источник status.json)"""
@@ -1722,18 +1860,26 @@ class SnowVPNApp:
 
     # --- Обновление данных ---
     def _tick_uptime(self):
-        """Обновляет время работы прокси каждую секунду"""
-        if self.running and self.connect_start and hasattr(self, "home_uptime_val"):
-            elapsed = int(time.time() - self.connect_start)
-            hh = elapsed // 3600
-            mm = (elapsed % 3600) // 60
-            ss = elapsed % 60
-            self.home_canvas.itemconfig(
-                self.home_uptime_val,
-                text=f"{hh:02d}:{mm:02d}:{ss:02d}",
-                fill=SUCCESS
-            )
-        self.root.after(1000, self._tick_uptime)
+        """Показывает остаток подписки"""
+        if hasattr(self, "home_sub_val") and self.shared.accounts:
+            uid = getattr(self, "my_uid", "")
+            acc = next((a for a in self.shared.accounts if a.get("uid") == uid), None)
+            if acc:
+                exp = acc.get("expires")
+                if not exp:
+                    txt, color = "♾️", SUCCESS
+                else:
+                    left = exp - time.time() * 1000
+                    if left <= 0:
+                        txt, color = "Истекла", ERROR
+                    elif left < 3600000:
+                        txt, color = f"{int(left//60000)} мин", WARNING
+                    elif left < 86400000:
+                        txt, color = f"{int(left//3600000)} ч", WARNING
+                    else:
+                        txt, color = f"{int(left//86400000)} дн", SUCCESS
+                self.home_canvas.itemconfig(self.home_sub_val, text=txt, fill=color)
+        self.root.after(2000, self._tick_uptime)
 
     def _refresh_all(self):
         # Список стран на вкладке «Серверы»
@@ -1768,7 +1914,7 @@ class SnowVPNApp:
                     self.switch_off_x - 34, self.switch_off_y - 34,
                     self.switch_off_x + 34, self.switch_off_y + 34
                 )
-            self.home_canvas.itemconfig(self.home_uptime_val, text="00:00:00", fill=WARNING)
+            self.home_canvas.itemconfig(self.home_sub_val, text="♾️", fill=WARNING)
 
         # Статистика
         self.stat_labels["proxy_count"].config(text=str(len(self.config.proxies)))
@@ -1919,8 +2065,12 @@ class LoginWindow:
             self.alert.config(text="Подписка кончилась")
             return
         if self.remember.get():
-            json.dump({"uid": user.get("uid", ""), "device": device_fingerprint()},
-                      open(AUTH_FILE, "w", encoding="utf-8"))
+            json.dump({
+                "uid": user.get("uid", ""),
+                "email": user.get("email", ""),
+                "password": user.get("password", ""),
+                "device": device_fingerprint()
+            }, open(AUTH_FILE, "w", encoding="utf-8"))
         self.root.destroy()
         self.on_success(user)
 
