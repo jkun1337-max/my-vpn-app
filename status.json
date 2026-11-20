@@ -75,17 +75,7 @@
       "pass": "Bgj4D5"
     }
   ],
-  "accounts": [
-    {
-      "uid": "gandon@chik",
-      "email": "gandon@chik",
-      "password": "gandon@chik",
-      "name": "gandon@chik",
-      "active": false,
-      "expires": 1795186184031,
-      "shownPassword": true
-    }
-  ],
+  "accounts": [],
   "keys": [
     {
       "key": "SNOW-Z-7-5-B",
