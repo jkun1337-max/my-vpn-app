@@ -13,13 +13,7 @@
       "since": "19:00:21"
     }
   ],
-  "commands": {
-    "all": {
-      "action": "connect",
-      "host": "168.81.205.232",
-      "port": 9150
-    }
-  },
+  "commands": {},
   "proxies": [
     {
       "host": "138.219.122.200",
