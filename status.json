@@ -102,14 +102,6 @@
       "type": "socks5",
       "user": "cuVssE",
       "pass": "EEeq7g"
-    },
-    {
-      "host": "188.226.89.87",
-      "port": 8080,
-      "country": "Россия",
-      "type": "http",
-      "user": "",
-      "pass": ""
     }
   ],
   "accounts": [
