@@ -91,7 +91,7 @@
       "password": "1",
       "name": "1",
       "active": true,
-      "expires": 1795185184841.5505,
+      "expires": 1795185319692.9197,
       "shownPassword": true
     }
   ],
@@ -100,9 +100,9 @@
       "key": "SNOW-Z-7-5-B",
       "duration": 60480,
       "note": "1",
-      "activatedBy": null,
-      "activatedAt": null,
-      "expiresAt": null
+      "activatedBy": "1",
+      "activatedAt": 1795185259212,
+      "expiresAt": 1795185319692.9197
     }
   ]
 }
