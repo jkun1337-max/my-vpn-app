@@ -1,5 +1,12 @@
 {
-  "connections": [],
+  "connections": [
+    {
+      "user": "имя",
+      "proxy": "45.86.20.252:8000",
+      "country": "Нигерия",
+      "since": "13:26:16"
+    }
+  ],
   "commands": {},
   "proxies": [
     {
