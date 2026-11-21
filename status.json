@@ -1,5 +1,12 @@
 {
-  "connections": [],
+  "connections": [
+    {
+      "user": "deadgod",
+      "proxy": "168.81.205.232:9150",
+      "country": "Бразилия ",
+      "since": "20:20:12"
+    }
+  ],
   "commands": {},
   "proxies": [
     {
